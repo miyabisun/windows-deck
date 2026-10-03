@@ -6,3 +6,4 @@ package-lock.json
 test-results/
 playwright-report/
 DESIGN.md
+dist-release/

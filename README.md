@@ -36,6 +36,25 @@ are no tabs and every button is shown.
 - To build: Rust 1.96 (selected by `rust-toolchain.toml`) with the MSVC toolchain, and
   Node.js 24
 
+## Install
+
+Download `windows-deck-x86_64-pc-windows-msvc.exe` from the
+[latest release](https://github.com/miyabisun/windows-deck/releases/latest) and save it as
+`%LOCALAPPDATA%\Programs\windows-deck\windows-deck.exe`, then register it to
+[start at logon](#start-at-logon). From PowerShell:
+
+```powershell
+$dir = "$env:LOCALAPPDATA\Programs\windows-deck"
+New-Item -ItemType Directory -Force $dir | Out-Null
+Invoke-WebRequest -OutFile "$dir\windows-deck.exe" `
+  https://github.com/miyabisun/windows-deck/releases/latest/download/windows-deck-x86_64-pc-windows-msvc.exe
+```
+
+Only a copy in that folder [updates itself](#updates). Each release also has a `.sha256`
+file to check the download against. Windows 10 may need the
+[WebView2 runtime](https://developer.microsoft.com/microsoft-edge/webview2/) (the
+"Evergreen Bootstrapper"); Windows 11 already has it.
+
 ## Build and run
 
 ```powershell
@@ -44,7 +63,11 @@ npm run tauri build -- --no-bundle
 .\src-tauri\target\release\windows-deck.exe
 ```
 
-During development, `npm run tauri dev` runs the panel with hot reload.
+During development, `npm run tauri dev` runs the panel with hot reload. Only one panel
+runs at a time: starting it again brings the running one to the front.
+
+`windows-deck --version` prints the version. The release build writes its log to
+`%LOCALAPPDATA%\windows-deck\windows-deck.log`.
 
 ## Configuration
 
@@ -57,7 +80,7 @@ monitor: JAPANNEXT MNT # monitor to fill (optional)
 ```
 
 `monitor` is matched against windows-link's `GET /touch-monitors` by `id`, `name` or
-display name (`\.\DISPLAY2`), ignoring case. Without it the panel fills the touch
+display name (`\\.\DISPLAY2`), ignoring case. Without it the panel fills the touch
 monitor, if windows-link reports exactly one. If the monitor is not connected, there is
 no single touch monitor, or windows-link does not answer at startup, the panel fills the
 primary monitor; in the last case it moves to the right monitor once windows-link
@@ -66,14 +89,11 @@ defaults. Restart the panel after editing the file.
 
 ## Start at logon
 
-Copy the build to a per-user location and register a Task Scheduler task for your own
-logon (no administrator rights needed):
+Register a Task Scheduler task that starts the [installed](#install) exe when you sign
+in. The trigger is limited to your own logon, so no administrator rights are needed:
 
 ```powershell
 $dir = "$env:LOCALAPPDATA\Programs\windows-deck"
-New-Item -ItemType Directory -Force $dir | Out-Null
-Copy-Item .\src-tauri\target\release\windows-deck.exe $dir
-
 $action = New-ScheduledTaskAction -Execute "$dir\windows-deck.exe"
 $trigger = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME"
 $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) `
@@ -84,6 +104,36 @@ Start-ScheduledTask -TaskName windows-deck    # start it now
 ```
 
 The panel has no title bar; close it with Alt+F4 or `Stop-Process -Name windows-deck`.
+
+## Updates
+
+The installed panel checks the latest GitHub release when it starts and every hour. When
+the release is newer than itself it updates without asking, the same way windows-link
+does:
+
+1. downloads the exe and its `.sha256` file over HTTPS and checks the SHA-256,
+2. saves it as `windows-deck.exe.new` and checks that it runs and reports the release's
+   version,
+3. renames the running exe to `windows-deck.exe.old` (Windows allows renaming a running
+   exe, not replacing it) and moves the new one into its place,
+4. starts the new exe and exits. The new panel waits for the old one to close, and
+   deletes `windows-deck.exe.old` once its window is shown.
+
+There is no signing key: the download is trusted through GitHub, HTTPS and the SHA-256
+published with the release, so a fork can publish its own releases the same way. Any
+failure leaves the running version as it is and is logged; the next check tries again.
+Debug builds and copies run from anywhere other than
+`%LOCALAPPDATA%\Programs\windows-deck` never update. Nothing needs administrator rights.
+
+To check right away instead of waiting for the hour, run
+`%LOCALAPPDATA%\Programs\windows-deck\windows-deck.exe --check-update` while the panel is
+running; the running panel does the check (see the log for the result).
+`WINDOWS_DECK_UPDATE_URL` points the panel at another release feed in the GitHub API
+format (plain HTTP only for `127.0.0.1`, `localhost` and `[::1]`, for testing).
+
+Releases are built by GitHub Actions when a `vX.Y.Z` tag is pushed
+(`.github/workflows/release.yml`); the tag must match the version in `package.json`. The
+workflow uses only the token GitHub provides.
 
 ## Development
 
