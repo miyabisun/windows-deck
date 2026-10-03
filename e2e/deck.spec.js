@@ -100,6 +100,7 @@ test("says how to add buttons when there are none", async ({ page }) => {
 });
 
 test("works from the keyboard", async ({ page }) => {
+  mock.link.desktops = [];
   await open(page);
   await expect(page.locator(".tile")).toHaveCount(2);
   await page.keyboard.press("Tab");

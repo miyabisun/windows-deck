@@ -15,6 +15,17 @@ export async function loadConfig() {
 }
 
 /**
+ * This window's handle for windows-link to pin. In the browser it comes from `?hwnd=`
+ * (for tests), or there is none.
+ * @returns {Promise<number | null>}
+ */
+export async function windowHandle() {
+  if (isTauri()) return invoke("window_handle");
+  const hwnd = new URLSearchParams(location.search).get("hwnd");
+  return hwnd ? Number(hwnd) : null;
+}
+
+/**
  * Fill the configured monitor (or the touch monitor windows-link reports) and show the
  * window. Without an answer from windows-link the window goes to the primary monitor.
  * @returns {Promise<boolean>} whether windows-link answered, so the choice is final

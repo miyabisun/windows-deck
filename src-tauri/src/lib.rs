@@ -41,9 +41,23 @@ fn place_window(window: WebviewWindow, monitor: Option<String>) -> Result<String
     Ok(target.and_then(|m| m.name().cloned()).unwrap_or_default())
 }
 
+/// This window's handle, which windows-link pins to every virtual desktop.
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)] // Tauri hands command arguments over by value.
+fn window_handle(window: WebviewWindow) -> Result<isize, String> {
+    window
+        .hwnd()
+        .map(|hwnd| hwnd.0 as isize)
+        .map_err(|err| err.to_string())
+}
+
 pub fn run() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![deck_config, place_window])
+        .invoke_handler(tauri::generate_handler![
+            deck_config,
+            place_window,
+            window_handle
+        ])
         .run(tauri::generate_context!())
         .expect("windows-deck failed to start");
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { describeState, pressFailure } from "./display.js";
+import { describeState, pressFailure, switchFailure } from "./display.js";
 
 describe("describeState", () => {
   it("shows the current output device and notes a disconnected alternative", () => {
@@ -83,5 +83,15 @@ describe("pressFailure", () => {
 
   it("explains that the request did not reach windows-link", () => {
     expect(pressFailure(null, null)).toBe("windows-link に届きませんでした");
+  });
+});
+
+describe("switchFailure", () => {
+  it("explains why a desktop switch failed", () => {
+    expect(switchFailure(404, { error: "not_found" })).toBe("このデスクトップはもうありません");
+    expect(switchFailure(503, { error: "desktops", message: "service stopped" })).toBe(
+      "仮想デスクトップを切り替えられません: service stopped",
+    );
+    expect(switchFailure(null, null)).toBe("windows-link に届きませんでした");
   });
 });

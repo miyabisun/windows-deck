@@ -1,15 +1,23 @@
 <script>
   import { onMount } from "svelte";
+  import DesktopTabs from "./lib/DesktopTabs.svelte";
   import Spinner from "./lib/Spinner.svelte";
   import Tile from "./lib/Tile.svelte";
   import { Link } from "./lib/link.svelte.js";
-  import { loadConfig, placeWindow } from "./lib/window.js";
+  import { buttonsFor } from "./lib/tabs.js";
+  import { loadConfig, placeWindow, windowHandle } from "./lib/window.js";
 
   /** @type {Link | null} */
   let link = $state(null);
   let configError = $state(null);
+  /** Whether the window has been placed and shown, so it can be pinned. */
+  let shown = $state(false);
+  /** @type {number | null} */
+  let hwnd = null;
   let monitor = null;
   let placed = false;
+
+  const visible = $derived(link ? buttonsFor(link.buttons, link.desktops) : []);
 
   onMount(() => {
     // A long press would open the WebView's context menu.
@@ -22,7 +30,9 @@
       started = new Link(config.link);
       link = started;
       started.start();
+      hwnd = await windowHandle();
       placed = await placeWindow(config.link, monitor);
+      shown = true;
     });
     return () => {
       document.removeEventListener("contextmenu", noMenu);
@@ -37,7 +47,22 @@
       placeWindow(link.base, monitor);
     }
   });
+
+  // Stay on every virtual desktop; see Link.pinRound for when to pin again.
+  $effect(() => {
+    if (link?.pinRound && shown && hwnd !== null) link.pin(hwnd);
+  });
 </script>
+
+{#if link && link.desktops.length > 0}
+  <DesktopTabs
+    desktops={link.desktops}
+    switching={link.switching}
+    failure={link.desktopFailure}
+    disabled={link.status !== "connected"}
+    onswitch={(id) => link.switchDesktop(id)}
+  />
+{/if}
 
 <main class="deck">
   {#if configError}
@@ -62,9 +87,11 @@
         を再起動してください。
       </p>
     </div>
+  {:else if visible.length === 0}
+    <p class="quiet">このデスクトップに割り当てたボタンはありません。</p>
   {:else}
     <div class="grid">
-      {#each link.buttons as button (button.id)}
+      {#each visible as button (button.id)}
         <Tile
           {button}
           pending={!!link.pending[button.id]}

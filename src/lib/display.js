@@ -47,3 +47,14 @@ export function pressFailure(status, body) {
   if (body?.message) return `Windows の操作に失敗しました: ${body.message}`;
   return `windows-link がエラーを返しました（HTTP ${status}）`;
 }
+
+/**
+ * The reason shown after a desktop tab could not switch Windows to its desktop.
+ * @param {number | null} status HTTP status, or null when the request did not get an answer
+ * @param {any} body the JSON error body, if any
+ */
+export function switchFailure(status, body) {
+  if (status === null) return "windows-link に届きませんでした";
+  if (body?.error === "not_found") return "このデスクトップはもうありません";
+  return `仮想デスクトップを切り替えられません: ${body?.message ?? `HTTP ${status}`}`;
+}

@@ -15,6 +15,19 @@ in their order, with their current state, and follows changes through windows-li
   and the panel reconnects by itself.
 - The theme follows the Windows light/dark setting.
 
+## Virtual desktops
+
+The panel stays on every Windows virtual desktop: once connected (and again after every
+reconnection) it asks windows-link to pin its window. A row of tabs at the top shows the
+desktops, with the current one selected. Switching desktops in Windows moves the
+selection; tapping a tab switches Windows to that desktop. Renamed, added and removed
+desktops show up right away.
+
+Each tab shows the buttons bound to its desktop plus the buttons bound to none. Bind a
+button with `desktop: <id>` in windows-link's configuration, using an id from
+windows-link's `GET /desktops`. If windows-link cannot reach the virtual desktops, there
+are no tabs and every button is shown.
+
 ## Requirements
 
 - Windows 10 or 11 (x64) with the WebView2 runtime (included in Windows 11)

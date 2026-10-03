@@ -26,6 +26,15 @@ const volume = (value) => ({
   state: { kind: "volume", running: true, volume: value, levels: [0.2, 1] },
 });
 
+export function initialDesktops(current = 0) {
+  return ["dev", "ゲーム", "ブルアカ", "アダルト"].map((name, index) => ({
+    id: `GUID-${index}`,
+    name,
+    index,
+    current: index === current,
+  }));
+}
+
 export function initialButtons() {
   return [output("motu"), volume(1)];
 }
@@ -38,6 +47,13 @@ export async function startMockLink() {
     nextFailure: null,
     delayMs: 0,
     down: false,
+    desktops: initialDesktops(),
+    /** @type {string | null} */
+    desktopsError: null,
+    /** @type {string[]} */
+    switches: [],
+    /** @type {string[]} */
+    pins: [],
   };
   const sockets = new Set();
   const broadcast = (message) => {
@@ -46,6 +62,25 @@ export async function startMockLink() {
 
   const server = http.createServer(async (req, res) => {
     res.setHeader("Access-Control-Allow-Origin", "*");
+    const sw = req.url.match(/^\/desktops\/([^/]+)\/switch$/);
+    if (req.method === "POST" && sw && !link.down) {
+      const id = decodeURIComponent(sw[1]);
+      link.switches.push(id);
+      res.setHeader("Content-Type", "application/json");
+      if (!link.desktops.some((d) => d.id === id)) {
+        res.statusCode = 404;
+        return res.end(JSON.stringify({ error: "not_found", message: "no desktop with this id" }));
+      }
+      link.desktops = link.desktops.map((d) => ({ ...d, current: d.id === id }));
+      broadcast({ type: "desktops", reason: "changed", desktops: link.desktops, error: null });
+      return res.end(JSON.stringify({ desktops: link.desktops, error: null }));
+    }
+    const pin = req.url.match(/^\/windows\/([^/]+)\/pin$/);
+    if (req.method === "POST" && pin && !link.down) {
+      link.pins.push(pin[1]);
+      res.setHeader("Content-Type", "application/json");
+      return res.end(JSON.stringify({ pinned: true }));
+    }
     const press = req.url.match(/^\/buttons\/([^/]+)\/press$/);
     if (req.method === "POST" && press && !link.down) {
       const id = decodeURIComponent(press[1]);
@@ -81,7 +116,14 @@ export async function startMockLink() {
     wss.handleUpgrade(req, socket, head, (ws) => {
       sockets.add(ws);
       ws.on("close", () => sockets.delete(ws));
-      ws.send(JSON.stringify({ type: "snapshot", buttons: link.buttons, desktops: [] }));
+      ws.send(
+        JSON.stringify({
+          type: "snapshot",
+          buttons: link.buttons,
+          desktops: link.desktops,
+          desktops_error: link.desktopsError,
+        }),
+      );
     });
   });
 
@@ -96,6 +138,11 @@ export async function startMockLink() {
       const index = link.buttons.findIndex((b) => b.id === button.id);
       link.buttons[index] = button;
       broadcast({ type: "button", button });
+    },
+    /** Change the desktops as if Windows changed them, and notify like windows-link does. */
+    setDesktops(desktops, reason = "changed") {
+      link.desktops = desktops;
+      broadcast({ type: "desktops", reason, desktops, error: null });
     },
     goDown() {
       link.down = true;

@@ -1,7 +1,7 @@
 // Connection to windows-link: the button list and states from the `/events` socket,
 // presses over HTTP, and automatic reconnection.
 
-import { pressFailure } from "./display.js";
+import { pressFailure, switchFailure } from "./display.js";
 
 const FIRST_RETRY_MS = 1000;
 const MAX_RETRY_MS = 5000;
@@ -15,6 +15,19 @@ export class Link {
   pending = $state({});
   /** @type {Record<string, string>} */
   failures = $state({});
+  /** @type {Array<{ id: string, name: string, index: number, current: boolean }>} */
+  desktops = $state([]);
+  /** @type {string | null} why windows-link has no desktops, if it says */
+  desktopsError = $state(null);
+  /** @type {string | null} the desktop a tab is switching to */
+  switching = $state(null);
+  /** @type {string | null} */
+  desktopFailure = $state(null);
+  /**
+   * Bumped whenever the window must be pinned again: on each new connection (windows-link
+   * may have restarted) and when windows-link reconnects to Explorer, which forgets pins.
+   */
+  pinRound = $state(0);
 
   #base;
   #env;
@@ -70,9 +83,17 @@ export class Link {
   #receive(message) {
     if (message.type === "snapshot") {
       this.buttons = message.buttons;
+      this.desktops = message.desktops ?? [];
+      this.desktopsError = message.desktops_error ?? null;
       this.status = "connected";
+      this.pinRound += 1;
     } else if (message.type === "button") {
       this.#replace(message.button);
+    } else if (message.type === "desktops") {
+      this.desktops = message.desktops;
+      this.desktopsError = message.error ?? null;
+      this.desktopFailure = null;
+      if (message.reason === "reconnected") this.pinRound += 1;
     }
   }
 
@@ -98,6 +119,42 @@ export class Link {
       this.failures[id] = pressFailure(null, null);
     } finally {
       delete this.pending[id];
+    }
+  }
+
+  /** Ask windows-link to switch Windows to a desktop; one switch at a time. */
+  async switchDesktop(id) {
+    if (this.switching || this.status !== "connected") return;
+    this.switching = id;
+    this.desktopFailure = null;
+    try {
+      const response = await this.#env.fetch(
+        `${this.#base}/desktops/${encodeURIComponent(id)}/switch`,
+        { method: "POST" },
+      );
+      const body = await response.json().catch(() => null);
+      if (response.ok && body?.desktops) this.desktops = body.desktops;
+      else this.desktopFailure = switchFailure(response.status, body);
+    } catch {
+      this.desktopFailure = switchFailure(null, null);
+    } finally {
+      this.switching = null;
+    }
+  }
+
+  /**
+   * Show a window on every virtual desktop.
+   * @param {number} hwnd
+   * @returns {Promise<boolean>} whether windows-link pinned it
+   */
+  async pin(hwnd) {
+    try {
+      const response = await this.#env.fetch(`${this.#base}/windows/${hwnd}/pin`, {
+        method: "POST",
+      });
+      return response.ok;
+    } catch {
+      return false;
     }
   }
 }

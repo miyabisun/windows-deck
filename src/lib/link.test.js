@@ -146,3 +146,102 @@ describe("Link", () => {
     expect(t.timers).toHaveLength(0);
   });
 });
+
+const desktops = (current) =>
+  ["dev", "ゲーム", "ブルアカ"].map((name, index) => ({
+    id: `GUID-${index}`,
+    name,
+    index,
+    current: index === current,
+  }));
+
+describe("Link desktops", () => {
+  let t;
+  beforeEach(() => {
+    t = setup();
+    t.link.start();
+    t.socket().open();
+  });
+
+  it("takes the desktops from the snapshot and follows desktop events", () => {
+    t.socket().send({ type: "snapshot", buttons: [], desktops: desktops(0), desktops_error: null });
+    expect(t.link.desktops.map((d) => d.name)).toEqual(["dev", "ゲーム", "ブルアカ"]);
+    expect(t.link.pinRound).toBe(1);
+
+    t.socket().send({ type: "desktops", reason: "changed", desktops: desktops(2), error: null });
+    expect(t.link.desktops.find((d) => d.current).name).toBe("ブルアカ");
+  });
+
+  it("has no desktops when windows-link cannot reach them", () => {
+    t.socket().send({
+      type: "snapshot",
+      buttons: [],
+      desktops: [],
+      desktops_error: "virtual desktops are not enabled",
+    });
+    expect(t.link.desktops).toEqual([]);
+    expect(t.link.desktopsError).toBe("virtual desktops are not enabled");
+  });
+
+  it("asks for the window to be pinned again after reconnecting or an Explorer restart", () => {
+    t.socket().send({ type: "snapshot", buttons: [], desktops: [] });
+    t.socket().drop();
+    t.timers.shift().fn();
+    t.socket().open();
+    t.socket().send({ type: "snapshot", buttons: [], desktops: [] });
+    expect(t.link.pinRound).toBe(2);
+    t.socket().send({ type: "desktops", reason: "changed", desktops: desktops(1), error: null });
+    expect(t.link.pinRound).toBe(2);
+    t.socket().send({
+      type: "desktops",
+      reason: "reconnected",
+      desktops: desktops(1),
+      error: null,
+    });
+    expect(t.link.pinRound).toBe(3);
+  });
+
+  it("asks windows-link to switch and shows the answer", async () => {
+    t.socket().send({ type: "snapshot", buttons: [], desktops: desktops(0) });
+    const switched = t.link.switchDesktop("GUID-1");
+    expect(t.requests[0].url).toBe("http://127.0.0.1:4730/desktops/GUID-1/switch");
+    expect(t.requests[0].init.method).toBe("POST");
+    expect(t.link.switching).toBe("GUID-1");
+    t.link.switchDesktop("GUID-2");
+    expect(t.requests).toHaveLength(1);
+
+    t.reply(200, { desktops: desktops(1), error: null });
+    await switched;
+    expect(t.link.switching).toBeNull();
+    expect(t.link.desktops.find((d) => d.current).id).toBe("GUID-1");
+  });
+
+  it("says why a switch failed until the desktops change", async () => {
+    t.socket().send({ type: "snapshot", buttons: [], desktops: desktops(0) });
+    let switched = t.link.switchDesktop("GUID-9");
+    t.reply(404, { error: "not_found", message: "no desktop with this id" });
+    await switched;
+    expect(t.link.desktopFailure).toBe("このデスクトップはもうありません");
+
+    t.socket().send({ type: "desktops", reason: "removed", desktops: desktops(0), error: null });
+    expect(t.link.desktopFailure).toBeNull();
+
+    switched = t.link.switchDesktop("GUID-1");
+    t.fail();
+    await switched;
+    expect(t.link.desktopFailure).toBe("windows-link に届きませんでした");
+  });
+
+  it("pins a window and reports whether it worked", async () => {
+    t.socket().send({ type: "snapshot", buttons: [], desktops: desktops(0) });
+    let pinned = t.link.pin(4723016);
+    expect(t.requests[0].url).toBe("http://127.0.0.1:4730/windows/4723016/pin");
+    expect(t.requests[0].init.method).toBe("POST");
+    t.reply(200, { pinned: true });
+    expect(await pinned).toBe(true);
+
+    pinned = t.link.pin(4723016);
+    t.reply(503, { error: "desktops", message: "not enabled" });
+    expect(await pinned).toBe(false);
+  });
+});
