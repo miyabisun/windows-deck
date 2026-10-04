@@ -100,9 +100,11 @@ export async function startMockLink() {
       }
       const button = link.buttons[index];
       link.buttons[index] =
-        button.id === "output"
-          ? output(button.state.current === "motu" ? "jbl" : "motu")
-          : volume(button.state.volume > 0.6 ? 0.2 : 1);
+        button.state.kind === "voice"
+          ? { ...button, state: { ...button.state, joined: !button.state.joined } }
+          : button.id === "output"
+            ? output(button.state.current === "motu" ? "jbl" : "motu")
+            : volume(button.state.volume > 0.6 ? 0.2 : 1);
       broadcast({ type: "button", button: link.buttons[index] });
       return res.end(JSON.stringify({ button: link.buttons[index] }));
     }

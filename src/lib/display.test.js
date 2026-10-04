@@ -95,3 +95,39 @@ describe("switchFailure", () => {
     expect(switchFailure(null, null)).toBe("windows-link に届きませんでした");
   });
 });
+
+describe("voice buttons", () => {
+  it("say whether the user is in the button's channel", () => {
+    expect(describeState({ kind: "voice", available: true, joined: true, reason: null })).toEqual({
+      text: "参加中",
+      note: null,
+      failed: false,
+    });
+    expect(
+      describeState({ kind: "voice", available: true, joined: false, reason: null }).text,
+    ).toBe("未参加");
+  });
+
+  it("explain an unreachable Discord in a way the user can act on", () => {
+    const off = (reason) =>
+      describeState({ kind: "voice", available: false, joined: false, reason });
+    expect(off("Discord is not running")).toEqual({
+      text: "Discord 未接続",
+      note: "Discord が起動していません（押すと起動して参加します）",
+      failed: false,
+    });
+    expect(off("windows-link needs approval in Discord: press a Discord button").note).toBe(
+      "押すと Discord に許可の確認が出ます",
+    );
+    expect(off("secrets.yaml has no discord section").note).toBe(
+      "secrets.yaml has no discord section",
+    );
+  });
+
+  it("explain failed presses", () => {
+    expect(
+      pressFailure(409, { error: "discord_unavailable", message: "Discord did not start in time" }),
+    ).toBe("Discord につながりません: Discord did not start in time");
+    expect(pressFailure(409, { error: "discord_rejected" })).toBe("Discord で許可されませんでした");
+  });
+});
