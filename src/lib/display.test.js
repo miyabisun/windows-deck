@@ -97,15 +97,15 @@ describe("switchFailure", () => {
 });
 
 describe("voice buttons", () => {
-  it("say whether the user is in the button's channel", () => {
+  it("say what a press does: join the voice chat, or leave it while in it", () => {
     expect(describeState({ kind: "voice", available: true, joined: true, reason: null })).toEqual({
-      text: "参加中",
-      note: null,
+      text: "ボイチャから退室",
+      note: "参加中",
       failed: false,
     });
     expect(
       describeState({ kind: "voice", available: true, joined: false, reason: null }).text,
-    ).toBe("未参加");
+    ).toBe("ボイチャに入室");
   });
 
   it("explain an unreachable Discord in a way the user can act on", () => {
@@ -129,5 +129,30 @@ describe("voice buttons", () => {
       pressFailure(409, { error: "discord_unavailable", message: "Discord did not start in time" }),
     ).toBe("Discord につながりません: Discord did not start in time");
     expect(pressFailure(409, { error: "discord_rejected" })).toBe("Discord で許可されませんでした");
+  });
+});
+
+describe("launch and game buttons", () => {
+  it("say what a press will do", () => {
+    expect(describeState({ kind: "launch" })).toEqual({ text: "起動", note: null, failed: false });
+    expect(describeState({ kind: "game", running: false })).toEqual({
+      text: "起動",
+      note: null,
+      failed: false,
+    });
+    expect(describeState({ kind: "game", running: true })).toEqual({
+      text: "終了",
+      note: "起動中",
+      failed: false,
+    });
+  });
+
+  it("explain failed presses", () => {
+    expect(pressFailure(409, { error: "no_window", message: "x" })).toBe(
+      "ゲームのウィンドウがまだ無いため閉じられません",
+    );
+    expect(pressFailure(500, { error: "launch", message: "cannot open x" })).toBe(
+      "起動できませんでした: cannot open x",
+    );
   });
 });

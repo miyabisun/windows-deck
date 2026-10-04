@@ -17,6 +17,8 @@ export class Link {
   failures = $state({});
   /** @type {Array<{ id: string, name: string, index: number, current: boolean }>} */
   desktops = $state([]);
+  /** @type {string[]} desktop files whose desktop does not exist */
+  unmatched = $state([]);
   /** @type {string | null} why windows-link has no desktops, if it says */
   desktopsError = $state(null);
   /** @type {string | null} the desktop a tab is switching to */
@@ -84,6 +86,7 @@ export class Link {
     if (message.type === "snapshot") {
       this.buttons = message.buttons;
       this.desktops = message.desktops ?? [];
+      this.unmatched = message.unmatched ?? [];
       this.desktopsError = message.desktops_error ?? null;
       this.status = "connected";
       this.pinRound += 1;
@@ -91,6 +94,7 @@ export class Link {
       this.#replace(message.button);
     } else if (message.type === "desktops") {
       this.desktops = message.desktops;
+      this.unmatched = message.unmatched ?? [];
       this.desktopsError = message.error ?? null;
       this.desktopFailure = null;
       if (message.reason === "reconnected") this.pinRound += 1;
@@ -152,6 +156,43 @@ export class Link {
       const response = await this.#env.fetch(`${this.#base}/windows/${hwnd}/pin`, {
         method: "POST",
       });
+      return response.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Create a desktop for a desktop file that has none; Windows switches to it. */
+  async createDesktop(name) {
+    if (this.status !== "connected") return;
+    this.desktopFailure = null;
+    try {
+      const response = await this.#env.fetch(`${this.#base}/desktops`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      const body = await response.json().catch(() => null);
+      if (response.ok && body?.desktops) {
+        this.desktops = body.desktops;
+        this.unmatched = body.unmatched ?? [];
+      } else if (body?.error === "exists") {
+        this.desktopFailure = `「${name}」はもうあります`;
+      } else {
+        this.desktopFailure = switchFailure(response.status, body);
+      }
+    } catch {
+      this.desktopFailure = switchFailure(null, null);
+    }
+  }
+
+  /**
+   * Put the PC to sleep.
+   * @returns {Promise<boolean>} whether windows-link accepted
+   */
+  async sleep() {
+    try {
+      const response = await this.#env.fetch(`${this.#base}/power/sleep`, { method: "POST" });
       return response.ok;
     } catch {
       return false;

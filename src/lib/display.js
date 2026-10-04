@@ -24,8 +24,16 @@ export function describeState(state) {
       };
     case "voice":
       if (state.available)
-        return { text: state.joined ? "参加中" : "未参加", note: null, failed: false };
+        return state.joined
+          ? { text: "ボイチャから退室", note: "参加中", failed: false }
+          : { text: "ボイチャに入室", note: null, failed: false };
       return { text: "Discord 未接続", note: voiceReason(state.reason), failed: false };
+    case "launch":
+      return { text: "起動", note: null, failed: false };
+    case "game":
+      return state.running
+        ? { text: "終了", note: "起動中", failed: false }
+        : { text: "起動", note: null, failed: false };
     case "error":
       return { text: "状態を読めません", note: state.message ?? null, failed: true };
     default:
@@ -62,6 +70,10 @@ export function pressFailure(status, body) {
       return `Discord につながりません: ${body.message}`;
     case "discord_rejected":
       return "Discord で許可されませんでした";
+    case "no_window":
+      return "ゲームのウィンドウがまだ無いため閉じられません";
+    case "launch":
+      return `起動できませんでした: ${body.message}`;
     case "discord":
       return `Discord の操作に失敗しました: ${body.message}`;
   }

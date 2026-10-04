@@ -62,7 +62,7 @@ test("renamed, added and removed desktops update the tabs", async ({ page }) => 
 
 test("each tab shows its own buttons and the shared ones", async ({ page }) => {
   mock.link.buttons = mock.link.buttons.map((b) =>
-    b.id === "sf6-volume" ? { ...b, desktop: "guid-1" } : b,
+    b.id === "sf6-volume" ? { ...b, desktop: "ゲーム" } : b,
   );
   await open(page);
   const tiles = page.locator(".tile");
@@ -73,7 +73,7 @@ test("each tab shows its own buttons and the shared ones", async ({ page }) => {
   await expect(tiles).toHaveCount(2);
   await expect(tiles.nth(1)).toContainText("スト6 音量");
 
-  mock.link.buttons = mock.link.buttons.map((b) => ({ ...b, desktop: "GUID-3" }));
+  mock.link.buttons = mock.link.buttons.map((b) => ({ ...b, desktop: "アダルト" }));
   await page.reload();
   await expect(page.getByText("このデスクトップに割り当てたボタンはありません。")).toBeVisible();
 });
@@ -82,7 +82,7 @@ test("without virtual desktops there are no tabs and every button shows", async 
   mock.link.desktops = [];
   mock.link.desktopsError = "virtual desktops are not enabled";
   mock.link.buttons = mock.link.buttons.map((b) =>
-    b.id === "sf6-volume" ? { ...b, desktop: "GUID-1" } : b,
+    b.id === "sf6-volume" ? { ...b, desktop: "ゲーム" } : b,
   );
   await open(page);
   await expect(page.locator(".tile")).toHaveCount(2);
@@ -124,7 +124,8 @@ test("the tab bar fits a narrow panel and marks the selection", async ({ page })
       overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
     };
   });
-  expect(bar.height).toBe(48);
+  // Half a button: 144 / 2.
+  expect(bar.height).toBe(72);
   expect(bar.marker).toContain("rgb(76, 195, 203)");
   expect(bar.overflow).toBe(0);
   await page.screenshot({ path: "test-results/deck-tabs-dark-1280x800.png" });
@@ -146,5 +147,50 @@ test("tabs work from the keyboard", async ({ page }) => {
   await page.keyboard.press("Enter");
   await expect(selected(page)).toHaveText("アダルト");
   await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "デスクトップを作る" })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "スリープ" })).toBeFocused();
+  await page.keyboard.press("Tab");
   await expect(page.locator('[data-button="output"]')).toBeFocused();
+});
+
+test("shared buttons skip the desktops they except", async ({ page }) => {
+  mock.link.buttons = mock.link.buttons.map((b) =>
+    b.id === "output" ? { ...b, except: ["dev"] } : b,
+  );
+  await open(page);
+  await expect(selected(page)).toHaveText("dev");
+  await expect(page.locator('[data-button="output"]')).toHaveCount(0);
+  await page.getByRole("tab", { name: "ゲーム" }).click();
+  await expect(page.locator('[data-button="output"]')).toHaveCount(1);
+});
+
+test("the + button creates a desktop for a desktop file that has none", async ({ page }) => {
+  mock.link.unmatched = ["SF6"];
+  await open(page);
+  await page.getByRole("button", { name: "デスクトップを作る" }).click();
+  await page.getByRole("menuitem", { name: "SF6" }).click();
+  await expect(selected(page)).toHaveText("SF6");
+  await page.getByRole("button", { name: "デスクトップを作る" }).click();
+  await expect(page.getByRole("menu")).toContainText("作れるデスクトップはありません");
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("menu")).toHaveCount(0);
+});
+
+test("the moon button puts the PC to sleep", async ({ page }) => {
+  await open(page);
+  await expect(selected(page)).toHaveText("dev");
+  await page.getByRole("button", { name: "スリープ" }).click();
+  await expect.poll(() => mock.link.sleeps).toBe(1);
+});
+
+test("buttons with an icon show it", async ({ page }) => {
+  mock.link.buttons = mock.link.buttons.map((b) => (b.id === "output" ? { ...b, icon: true } : b));
+  await open(page);
+  const picture = page.locator('[data-button="output"] img');
+  await expect(picture).toHaveAttribute("src", `${mock.url}/buttons/output/icon`);
+  await expect.poll(() => picture.evaluate((img) => img.naturalWidth)).toBe(64);
+  await expect(page.locator('[data-button="sf6-volume"] img')).toHaveCount(0);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.screenshot({ path: "test-results/deck-tabs-actions.png" });
 });

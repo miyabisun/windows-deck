@@ -2,8 +2,15 @@
   import Spinner from "./Spinner.svelte";
   import { describeState } from "./display.js";
 
-  /** @type {{ button: any, pending?: boolean, failure?: string, disabled?: boolean, onpress: () => void }} */
-  let { button, pending = false, failure = undefined, disabled = false, onpress } = $props();
+  /** @type {{ button: any, icon?: string | null, pending?: boolean, failure?: string, disabled?: boolean, onpress: () => void }} */
+  let {
+    button,
+    icon = null,
+    pending = false,
+    failure = undefined,
+    disabled = false,
+    onpress,
+  } = $props();
 
   const shown = $derived(describeState(button.state));
   const note = $derived(failure ?? shown.note);
@@ -34,7 +41,12 @@
     if (!disabled) onpress();
   }}
 >
-  <span class="label">{button.label}</span>
+  <span class="head">
+    {#if icon}
+      <img class="picture" src={icon} alt="" draggable="false" />
+    {/if}
+    <span class="label">{button.label}</span>
+  </span>
   <span class="state">{shown.text}</span>
   {#if note}
     <span class="note" class:failure={failure || shown.failed}>{note}</span>
@@ -51,7 +63,7 @@
     flex-direction: column
     align-items: flex-start
     gap: var(--sp-2)
-    min-height: 144px
+    min-height: var(--tile-height)
     padding: var(--sp-4)
     border: 1px solid var(--c-border)
     border-radius: var(--radius-md)
@@ -76,6 +88,19 @@
 
     &.failed
       border-color: var(--c-danger)
+
+  .head
+    display: flex
+    align-items: center
+    gap: var(--sp-3)
+    min-width: 0
+
+  .picture
+    width: 56px
+    height: 56px
+    flex: none
+    border-radius: var(--radius-sm)
+    object-fit: contain
 
   .label
     font-size: var(--fs-label)

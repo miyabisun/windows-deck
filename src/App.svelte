@@ -54,13 +54,16 @@
   });
 </script>
 
-{#if link && link.desktops.length > 0}
+{#if link}
   <DesktopTabs
     desktops={link.desktops}
+    unmatched={link.unmatched}
     switching={link.switching}
     failure={link.desktopFailure}
     disabled={link.status !== "connected"}
     onswitch={(id) => link.switchDesktop(id)}
+    oncreate={(name) => link.createDesktop(name)}
+    onsleep={() => link.sleep()}
   />
 {/if}
 
@@ -94,6 +97,7 @@
       {#each visible as button (button.id)}
         <Tile
           {button}
+          icon={button.icon ? `${link.base}/buttons/${encodeURIComponent(button.id)}/icon` : null}
           pending={!!link.pending[button.id]}
           failure={link.failures[button.id]}
           disabled={link.status !== "connected"}
@@ -113,7 +117,7 @@
 
   .grid
     display: grid
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr))
+    grid-template-columns: repeat(auto-fill, minmax(var(--tile-width), 1fr))
     gap: var(--sp-3)
 
   .banner

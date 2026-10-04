@@ -245,3 +245,49 @@ describe("Link desktops", () => {
     expect(await pinned).toBe(false);
   });
 });
+
+describe("Link desktop files and sleep", () => {
+  let t;
+  beforeEach(() => {
+    t = setup();
+    t.link.start();
+    t.socket().open();
+  });
+
+  it("knows which desktop files have no desktop yet", () => {
+    t.socket().send({ type: "snapshot", buttons: [], desktops: desktops(0), unmatched: ["SF6"] });
+    expect(t.link.unmatched).toEqual(["SF6"]);
+    t.socket().send({ type: "desktops", reason: "created", desktops: desktops(0), unmatched: [] });
+    expect(t.link.unmatched).toEqual([]);
+  });
+
+  it("creates a desktop for a desktop file and takes the new list", async () => {
+    t.socket().send({ type: "snapshot", buttons: [], desktops: desktops(0), unmatched: ["SF6"] });
+    const created = t.link.createDesktop("SF6");
+    expect(t.requests[0].url).toBe("http://127.0.0.1:4730/desktops");
+    expect(t.requests[0].init.method).toBe("POST");
+    expect(JSON.parse(t.requests[0].init.body)).toEqual({ name: "SF6" });
+    const list = [...desktops(-1), { id: "GUID-3", name: "SF6", index: 3, current: true }];
+    t.reply(201, { desktops: list, unmatched: [], error: null });
+    await created;
+    expect(t.link.desktops.find((d) => d.current).name).toBe("SF6");
+    expect(t.link.unmatched).toEqual([]);
+  });
+
+  it("says why a desktop could not be created", async () => {
+    t.socket().send({ type: "snapshot", buttons: [], desktops: desktops(0), unmatched: ["SF6"] });
+    const created = t.link.createDesktop("SF6");
+    t.reply(409, { error: "exists", message: "a desktop with this name already exists" });
+    await created;
+    expect(t.link.desktopFailure).toBe("「SF6」はもうあります");
+  });
+
+  it("asks windows-link to put the PC to sleep", async () => {
+    t.socket().send({ type: "snapshot", buttons: [], desktops: [] });
+    const slept = t.link.sleep();
+    expect(t.requests[0].url).toBe("http://127.0.0.1:4730/power/sleep");
+    expect(t.requests[0].init.method).toBe("POST");
+    t.reply(202, { sleeping: true });
+    expect(await slept).toBe(true);
+  });
+});

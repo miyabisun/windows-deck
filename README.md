@@ -23,15 +23,24 @@ desktops, with the current one selected. Switching desktops in Windows moves the
 selection; tapping a tab switches Windows to that desktop. Renamed, added and removed
 desktops show up right away.
 
-Each tab shows the buttons bound to its desktop plus the buttons bound to none. Bind a
-button with `desktop: <id>` in windows-link's configuration, using an id from
-windows-link's `GET /desktops`. If windows-link cannot reach the virtual desktops, there
-are no tabs and every button is shown.
+Each tab shows windows-link's shared buttons (except those that list the desktop in
+`except`) followed by the buttons of the desktop's own file, `desktops/<desktop name>.yaml`
+in windows-link's configuration folder. If windows-link cannot reach the virtual desktops,
+there are no tabs and every button is shown.
+
+At the right end of the tab row:
+
+- **+** lists the desktop files that have no desktop (for example after the desktop was
+  renamed or removed in Windows); picking one creates that desktop and switches to it.
+- **Moon** puts the PC to sleep right away.
+
+Buttons with an icon in windows-link (an exe's or a shortcut's Windows icon) show it next
+to their label.
 
 ## Requirements
 
 - Windows 10 or 11 (x64) with the WebView2 runtime (included in Windows 11)
-- windows-link 0.1.1 or later running on the same PC (it allows this panel's window to
+- windows-link 0.1.3 or later running on the same PC (it allows this panel's window to
   read its API)
 - To build: Rust 1.96 (selected by `rust-toolchain.toml`) with the MSVC toolchain, and
   Node.js 24

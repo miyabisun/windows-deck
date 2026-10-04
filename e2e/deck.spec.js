@@ -103,6 +103,11 @@ test("works from the keyboard", async ({ page }) => {
   mock.link.desktops = [];
   await open(page);
   await expect(page.locator(".tile")).toHaveCount(2);
+  // The tab bar comes first: create a desktop, then sleep, then the buttons.
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "デスクトップを作る" })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "スリープ" })).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(tile(page, "output")).toBeFocused();
   const ring = await tile(page, "output").evaluate((el) => getComputedStyle(el).outlineWidth);
@@ -175,8 +180,9 @@ test("a Discord voice button shows and toggles whether you are in its channel", 
   mock.link.buttons = [voice({ available: true, joined: false })];
   await open(page);
   const tile = page.locator('[data-button="vc-uf4"]');
-  await expect(tile).toContainText("未参加");
+  await expect(tile).toContainText("ボイチャに入室");
   await tile.click();
+  await expect(tile).toContainText("ボイチャから退室");
   await expect(tile).toContainText("参加中");
 
   mock.change(voice({ available: false, joined: false, reason: "Discord is not running" }));

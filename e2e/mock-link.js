@@ -50,6 +50,9 @@ export async function startMockLink() {
     desktops: initialDesktops(),
     /** @type {string | null} */
     desktopsError: null,
+    /** @type {string[]} desktop files without a desktop */
+    unmatched: [],
+    sleeps: 0,
     /** @type {string[]} */
     switches: [],
     /** @type {string[]} */
@@ -62,6 +65,12 @@ export async function startMockLink() {
 
   const server = http.createServer(async (req, res) => {
     res.setHeader("Access-Control-Allow-Origin", "*");
+    if (req.method === "OPTIONS") {
+      res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT");
+      res.setHeader("Access-Control-Allow-Headers", "content-type");
+      res.statusCode = 204;
+      return res.end();
+    }
     const sw = req.url.match(/^\/desktops\/([^/]+)\/switch$/);
     if (req.method === "POST" && sw && !link.down) {
       const id = decodeURIComponent(sw[1]);
@@ -74,6 +83,45 @@ export async function startMockLink() {
       link.desktops = link.desktops.map((d) => ({ ...d, current: d.id === id }));
       broadcast({ type: "desktops", reason: "changed", desktops: link.desktops, error: null });
       return res.end(JSON.stringify({ desktops: link.desktops, error: null }));
+    }
+    if (req.method === "POST" && req.url === "/desktops" && !link.down) {
+      const chunks = [];
+      for await (const chunk of req) chunks.push(chunk);
+      const { name } = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      res.setHeader("Content-Type", "application/json");
+      if (link.desktops.some((d) => d.name === name)) {
+        res.statusCode = 409;
+        return res.end(JSON.stringify({ error: "exists", message: "exists" }));
+      }
+      link.desktops = [
+        ...link.desktops.map((d) => ({ ...d, current: false })),
+        { id: `GUID-${link.desktops.length}`, name, index: link.desktops.length, current: true },
+      ];
+      link.unmatched = link.unmatched.filter((n) => n !== name);
+      broadcast({
+        type: "desktops",
+        reason: "created",
+        desktops: link.desktops,
+        unmatched: link.unmatched,
+        error: null,
+      });
+      res.statusCode = 201;
+      return res.end(
+        JSON.stringify({ desktops: link.desktops, unmatched: link.unmatched, error: null }),
+      );
+    }
+    if (req.method === "POST" && req.url === "/power/sleep") {
+      link.sleeps += 1;
+      res.statusCode = 202;
+      res.setHeader("Content-Type", "application/json");
+      return res.end(JSON.stringify({ sleeping: true }));
+    }
+    const icon = req.url.match(/^\/buttons\/([^/]+)\/icon$/);
+    if (req.method === "GET" && icon) {
+      res.setHeader("Content-Type", "image/svg+xml");
+      return res.end(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="#e0a800"/></svg>',
+      );
     }
     const pin = req.url.match(/^\/windows\/([^/]+)\/pin$/);
     if (req.method === "POST" && pin && !link.down) {
@@ -123,6 +171,7 @@ export async function startMockLink() {
           type: "snapshot",
           buttons: link.buttons,
           desktops: link.desktops,
+          unmatched: link.unmatched,
           desktops_error: link.desktopsError,
         }),
       );
@@ -144,7 +193,7 @@ export async function startMockLink() {
     /** Change the desktops as if Windows changed them, and notify like windows-link does. */
     setDesktops(desktops, reason = "changed") {
       link.desktops = desktops;
-      broadcast({ type: "desktops", reason, desktops, error: null });
+      broadcast({ type: "desktops", reason, desktops, unmatched: link.unmatched, error: null });
     },
     goDown() {
       link.down = true;
