@@ -29,7 +29,9 @@ export function describeState(state) {
           : { text: "ボイチャに入室", note: null, failed: false };
       return { text: "Discord 未接続", note: voiceReason(state.reason), failed: false };
     case "launch":
-      return { text: "起動", note: null, failed: false };
+      return state.running
+        ? { text: "前に出す", note: "起動中", failed: false }
+        : { text: "起動", note: null, failed: false };
     case "game":
       return state.running
         ? { text: "終了", note: "起動中", failed: false }

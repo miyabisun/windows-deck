@@ -134,7 +134,16 @@ describe("voice buttons", () => {
 
 describe("launch and game buttons", () => {
   it("say what a press will do", () => {
-    expect(describeState({ kind: "launch" })).toEqual({ text: "起動", note: null, failed: false });
+    expect(describeState({ kind: "launch", running: false })).toEqual({
+      text: "起動",
+      note: null,
+      failed: false,
+    });
+    expect(describeState({ kind: "launch", running: true })).toEqual({
+      text: "前に出す",
+      note: "起動中",
+      failed: false,
+    });
     expect(describeState({ kind: "game", running: false })).toEqual({
       text: "起動",
       note: null,
