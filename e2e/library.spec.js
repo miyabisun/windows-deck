@@ -247,6 +247,37 @@ test("a right click opens the same menus as a long press", async ({ page }) => {
   expect(mock.link.started).toEqual([]);
 });
 
+test("dragging a game onto a label puts it there", async ({ page }) => {
+  await open(page);
+  await page.locator('[data-button="games"]').click();
+  await game(page, "646570").dragTo(chip(page, "R15"));
+  await expect(dialog(page).getByRole("status")).toHaveText(
+    "「Slay the Spire」に「R15」を付けました",
+  );
+  expect(mock.link.library.items[1].labels).toEqual(["uc-r15"]);
+  // It had no label, so the list that starts with the unlabeled games lets it go.
+  await expect(dialog(page)).toContainText("見つかりません");
+  expect(mock.link.started).toEqual([]);
+
+  // A game that already has the label stays as it is.
+  await showAll(page);
+  await game(page, "2868840").dragTo(chip(page, "R15"));
+  await expect(dialog(page).getByRole("status")).toHaveText(
+    "「Slay the Spire 2」にはもう「R15」が付いています",
+  );
+  await game(page, "1364780").dragTo(chip(page, "非表示"));
+  await expect.poll(() => names(page)).not.toContain("Street Fighter™ 6");
+});
+
+test("while labels cannot be changed, a game cannot be dropped on a label", async ({ page }) => {
+  mock.link.library.labels_locked = "Steam is not running";
+  await open(page);
+  await page.locator('[data-button="games"]').click();
+  await game(page, "646570").dragTo(chip(page, "R15"));
+  expect(mock.link.library.items[1].labels).toEqual([]);
+  await expect(game(page, "646570")).toBeVisible();
+});
+
 test("a library listing only installed games says why", async ({ page }) => {
   mock.link.library.partial = "secrets.yaml has no steam api_key";
   await open(page);

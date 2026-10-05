@@ -8,6 +8,7 @@
   import Spinner from "./Spinner.svelte";
   import Tile from "./Tile.svelte";
   import {
+    DRAG_TYPE,
     UNLABELED,
     labelsLockedReason,
     partialReason,
@@ -39,6 +40,8 @@
   let gameMenu = $state(null);
   /** @type {{ label: any, x: number, y: number } | null} the label whose menu is open */
   let labelMenu = $state(null);
+  /** @type {string | null} the label a dragged game is over */
+  let dropping = $state(null);
   /** @type {{ kind: "create" } | { kind: "rename" | "delete", label: any } | null} */
   let asking = $state(null);
 
@@ -101,6 +104,33 @@
     const { id } = label;
     asking = null;
     changeLabels(link.deleteLabel(button.id, id));
+  }
+
+  /**
+   * Let a dragged game drop on a label, unless labels cannot be changed now.
+   * @param {DragEvent} event @param {any} label
+   */
+  function dragOver(event, label) {
+    if (locked || !event.dataTransfer?.types.includes(DRAG_TYPE)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "link";
+    dropping = label.id;
+  }
+
+  /** Put the dropped game in the label. @param {DragEvent} event @param {any} label */
+  async function drop(event, label) {
+    dropping = null;
+    const id = event.dataTransfer?.getData(DRAG_TYPE);
+    const item = library?.items.find((/** @type {any} */ i) => i.id === id);
+    if (!item) return;
+    event.preventDefault();
+    if (item.labels.includes(label.id)) {
+      tell(`「${item.name}」にはもう「${label.name}」が付いています`);
+      return;
+    }
+    const failed = await link.setLabel(button.id, label.id, item.id, true);
+    tell(failed ?? `「${item.name}」に「${label.name}」を付けました`);
+    if (!failed) await load();
   }
 
   /** @param {string} name */
@@ -183,8 +213,12 @@
             class="chip"
             aria-pressed={active.includes(label.id)}
             data-label={label.id}
+            class:dropping={dropping === label.id}
             use:longpress={(point) => (labelMenu = { label, ...point })}
             onclick={() => toggle(label.id)}
+            ondragover={(event) => dragOver(event, label)}
+            ondragleave={() => (dropping = null)}
+            ondrop={(event) => drop(event, label)}
           >
             {#if active.includes(label.id)}
               <Icon name="check" />
@@ -226,6 +260,7 @@
               {disabled}
               onpress={() => start(item)}
               onlong={(point) => (gameMenu = { item, ...point })}
+              drag={item.id}
             />
           {:else}
             <p class="quiet">見つかりません</p>
@@ -402,6 +437,11 @@
     &:disabled
       opacity: 0.5
       cursor: default
+
+    // A game dragged over it lands here.
+    &.dropping
+      border: 2px dashed var(--c-accent)
+      background: var(--c-hover-2)
 
   // The "+" that makes a label: a round chip as tall as the others.
   .add

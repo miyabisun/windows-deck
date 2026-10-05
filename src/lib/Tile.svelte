@@ -1,9 +1,10 @@
 <script>
   import Spinner from "./Spinner.svelte";
   import { describeState } from "./display.js";
+  import { DRAG_TYPE } from "./library.js";
   import { longpress } from "./longpress.js";
 
-  /** @type {{ button: { id: string, label: string, state?: any }, icon?: string | null, cover?: string | null, whole?: boolean, note?: string | null, pending?: boolean, failure?: string, disabled?: boolean, onpress: () => void, onlong?: ((point: { x: number, y: number }) => void) | null }} */
+  /** @type {{ button: { id: string, label: string, state?: any }, icon?: string | null, cover?: string | null, whole?: boolean, note?: string | null, pending?: boolean, failure?: string, disabled?: boolean, onpress: () => void, onlong?: ((point: { x: number, y: number }) => void) | null, drag?: string | null }} */
   let {
     button,
     icon = null,
@@ -15,6 +16,7 @@
     disabled = false,
     onpress,
     onlong = null,
+    drag = null,
   } = $props();
 
   // A game tile (any `cover`, even null) shows the game's picture and name instead of a
@@ -50,6 +52,14 @@
   aria-disabled={disabled}
   data-button={button.id}
   use:longpress={disabled ? null : onlong}
+  draggable={drag !== null && !disabled && pointer === "mouse" ? "true" : "false"}
+  ondragstart={(event) => {
+    if (drag === null || !event.dataTransfer) return;
+    // A mouse drags a game onto a label; a finger keeps its long press for the menu.
+    event.dataTransfer.setData(DRAG_TYPE, drag);
+    event.dataTransfer.effectAllowed = "link";
+    held = false;
+  }}
   onclick={() => {
     if (!disabled) onpress();
   }}

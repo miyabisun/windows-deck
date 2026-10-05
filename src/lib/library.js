@@ -6,6 +6,9 @@
  */
 export const UNLABELED = "@unlabeled";
 
+/** The drag data of a game being dragged onto a label: its ID. */
+export const DRAG_TYPE = "application/x-windows-deck-game";
+
 /** Fold full-width letters and case so that "ｓｔｒｅｅｔ" finds "Street". */
 const fold = (/** @type {string} */ text) => text.normalize("NFKC").toLowerCase();
 

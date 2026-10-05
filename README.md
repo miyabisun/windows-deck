@@ -54,6 +54,8 @@ the screen:
 - **+** at the end of the chips makes a label. Long-press a chip to rename or delete it
   (deleting asks first and keeps the games; Steam's own labels cannot be renamed or
   deleted).
+- Drag a game onto a label chip with the mouse to put it in that label (a finger's long
+  press keeps opening the menu).
 - Tap a game to start it (or bring it to the front when it runs; a game that is not
   installed opens Steam's install dialog). The dialog closes.
 - Long-press (or right-click) a game for its menu: **TOPに固定** pins it to the tab, where pinned games
