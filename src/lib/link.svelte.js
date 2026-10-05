@@ -1,7 +1,10 @@
 // Connection to windows-link: the button list and states from the `/events` socket,
 // presses over HTTP, and automatic reconnection.
 
-import { pressFailure, switchFailure } from "./display.js";
+import { libraryFailure, pressFailure, switchFailure } from "./display.js";
+
+/** The `pending` and `failures` key of a library game. */
+export const itemKey = (/** @type {string} */ id, /** @type {string} */ item) => `${id}/${item}`;
 
 const FIRST_RETRY_MS = 1000;
 const MAX_RETRY_MS = 5000;
@@ -123,6 +126,78 @@ export class Link {
       this.failures[id] = pressFailure(null, null);
     } finally {
       delete this.pending[id];
+    }
+  }
+
+  /**
+   * A library button's games.
+   * @returns {Promise<{ library: any, failure: string | null }>}
+   */
+  async library(id) {
+    try {
+      const response = await this.#env.fetch(
+        `${this.#base}/buttons/${encodeURIComponent(id)}/library`,
+      );
+      const body = await response.json().catch(() => null);
+      if (response.ok && body?.items) return { library: body, failure: null };
+      return { library: null, failure: libraryFailure(response.status, body) };
+    } catch {
+      return { library: null, failure: libraryFailure(null, null) };
+    }
+  }
+
+  /**
+   * Start a library game, or bring it to the front when it runs. Ignored while it is
+   * already starting; a failure stays under `itemKey` until the next try.
+   * @returns {Promise<boolean>} whether windows-link started it
+   */
+  async startItem(id, item) {
+    const key = itemKey(id, item);
+    if (this.pending[key] || this.status !== "connected") return false;
+    this.pending[key] = true;
+    delete this.failures[key];
+    try {
+      const response = await this.#env.fetch(
+        `${this.#base}/buttons/${encodeURIComponent(id)}/library/${encodeURIComponent(item)}/start`,
+        { method: "POST" },
+      );
+      if (response.ok) return true;
+      const body = await response.json().catch(() => null);
+      this.failures[key] = libraryFailure(response.status, body);
+    } catch {
+      this.failures[key] = libraryFailure(null, null);
+    } finally {
+      delete this.pending[key];
+    }
+    return false;
+  }
+
+  /**
+   * Pin a library game to its button's tab, or take it off.
+   * @returns {Promise<string | null>} why it failed, if it did
+   */
+  async setPinned(id, item, pinned) {
+    const key = itemKey(id, item);
+    delete this.failures[key];
+    const failed = await this.#setPinned(id, item, pinned);
+    if (failed) this.failures[key] = failed;
+    return failed;
+  }
+
+  async #setPinned(id, item, pinned) {
+    try {
+      const response = await this.#env.fetch(
+        `${this.#base}/buttons/${encodeURIComponent(id)}/pins/${encodeURIComponent(item)}`,
+        { method: pinned ? "PUT" : "DELETE" },
+      );
+      const body = await response.json().catch(() => null);
+      if (response.ok && body?.button) {
+        this.#replace(body.button);
+        return null;
+      }
+      return libraryFailure(response.status, body);
+    } catch {
+      return libraryFailure(null, null);
     }
   }
 

@@ -1,9 +1,11 @@
 <script>
   import { onMount } from "svelte";
   import DesktopTabs from "./lib/DesktopTabs.svelte";
+  import LibraryModal from "./lib/LibraryModal.svelte";
   import Spinner from "./lib/Spinner.svelte";
   import Tile from "./lib/Tile.svelte";
-  import { Link } from "./lib/link.svelte.js";
+  import { pictureUrl, pinsOf } from "./lib/library.js";
+  import { Link, itemKey } from "./lib/link.svelte.js";
   import { buttonsFor } from "./lib/tabs.js";
   import { loadConfig, placeWindow, windowHandle } from "./lib/window.js";
 
@@ -18,6 +20,10 @@
   let placed = false;
 
   const visible = $derived(link ? buttonsFor(link.buttons, link.desktops) : []);
+  const pins = $derived(pinsOf(visible));
+  /** @type {string | null} the library button whose list is open */
+  let opened = $state(null);
+  const openedButton = $derived(link?.buttons.find((b) => b.id === opened) ?? null);
 
   onMount(() => {
     // A long press would open the WebView's context menu.
@@ -101,12 +107,28 @@
           pending={!!link.pending[button.id]}
           failure={link.failures[button.id]}
           disabled={link.status !== "connected"}
-          onpress={() => link.press(button.id)}
+          onpress={() =>
+            button.state?.kind === "library" ? (opened = button.id) : link.press(button.id)}
+        />
+      {/each}
+      {#each pins as { button, pin } (itemKey(button, pin.id))}
+        <Tile
+          button={{ id: itemKey(button, pin.id), label: pin.name }}
+          cover={pictureUrl(link.base, button, pin.id)}
+          pending={!!link.pending[itemKey(button, pin.id)]}
+          failure={link.failures[itemKey(button, pin.id)]}
+          disabled={link.status !== "connected"}
+          onpress={() => link.startItem(button, pin.id)}
+          onlong={() => link.setPinned(button, pin.id, false)}
         />
       {/each}
     </div>
   {/if}
 </main>
+
+{#if link && openedButton}
+  <LibraryModal {link} button={openedButton} onclose={() => (opened = null)} />
+{/if}
 
 <style lang="sass">
   .deck

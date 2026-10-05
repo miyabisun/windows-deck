@@ -36,6 +36,8 @@ export function describeState(state) {
       return state.running
         ? { text: "終了", note: "起動中", failed: false }
         : { text: "起動", note: null, failed: false };
+    case "library":
+      return { text: "一覧を開く", note: null, failed: false };
     case "error":
       return { text: "状態を読めません", note: state.message ?? null, failed: true };
     default:
@@ -81,6 +83,17 @@ export function pressFailure(status, body) {
   }
   if (body?.message) return `Windows の操作に失敗しました: ${body.message}`;
   return `windows-link がエラーを返しました（HTTP ${status}）`;
+}
+
+/**
+ * The reason shown after a library game could not be started, pinned or unpinned.
+ * @param {number | null} status HTTP status, or null when the request did not get an answer
+ * @param {any} body the JSON error body, if any
+ */
+export function libraryFailure(status, body) {
+  if (body?.error === "not_found")
+    return "ライブラリにこのゲームがありません（一覧を開き直してください）";
+  return pressFailure(status, body);
 }
 
 /**

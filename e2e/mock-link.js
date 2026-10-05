@@ -35,6 +35,33 @@ export function initialDesktops(current = 0) {
   }));
 }
 
+/** A `steam.library` button with its pins. */
+export const libraryButton = (pins = []) => ({
+  id: "games",
+  type: "steam.library",
+  label: "ゲーム検索",
+  desktop: null,
+  except: [],
+  icon: false,
+  state: { kind: "library", pins },
+});
+
+/** The games behind `libraryButton`. */
+export function initialLibrary() {
+  const game = (id, name, labels, installed = true) => ({ id, name, installed, labels });
+  return {
+    items: [
+      game("1364780", "Street Fighter™ 6", ["お気に入り"]),
+      game("646570", "Slay the Spire", []),
+      game("2868840", "Slay the Spire 2", ["R15"], false),
+      game("1039890", "METAL SLUG", ["outdate"]),
+    ],
+    labels: ["お気に入り", "R15", "outdate"],
+    hide: ["outdate"],
+    partial: null,
+  };
+}
+
 export function initialButtons() {
   return [output("motu"), volume(1)];
 }
@@ -57,6 +84,9 @@ export async function startMockLink() {
     switches: [],
     /** @type {string[]} */
     pins: [],
+    library: initialLibrary(),
+    /** @type {string[]} games started from a library */
+    started: [],
   };
   const sockets = new Set();
   const broadcast = (message) => {
@@ -66,7 +96,7 @@ export async function startMockLink() {
   const server = http.createServer(async (req, res) => {
     res.setHeader("Access-Control-Allow-Origin", "*");
     if (req.method === "OPTIONS") {
-      res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT");
+      res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE");
       res.setHeader("Access-Control-Allow-Headers", "content-type");
       res.statusCode = 204;
       return res.end();
@@ -115,6 +145,46 @@ export async function startMockLink() {
       res.statusCode = 202;
       res.setHeader("Content-Type", "application/json");
       return res.end(JSON.stringify({ sleeping: true }));
+    }
+    const picture = req.url.match(/^\/buttons\/games\/library\/(\d+)\/image$/);
+    if (req.method === "GET" && picture) {
+      res.setHeader("Content-Type", "image/svg+xml");
+      return res.end(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="460" height="215"><rect width="460" height="215" fill="#3b6ea8"/></svg>',
+      );
+    }
+    if (req.method === "GET" && req.url === "/buttons/games/library" && !link.down) {
+      const pinned = new Set(
+        link.buttons.find((b) => b.id === "games").state.pins.map((p) => p.id),
+      );
+      res.setHeader("Content-Type", "application/json");
+      return res.end(
+        JSON.stringify({
+          ...link.library,
+          items: link.library.items.map((i) => ({ ...i, pinned: pinned.has(i.id) })),
+        }),
+      );
+    }
+    const start = req.url.match(/^\/buttons\/games\/library\/([^/]+)\/start$/);
+    if (req.method === "POST" && start && !link.down) {
+      link.started.push(start[1]);
+      res.statusCode = 204;
+      return res.end();
+    }
+    const pinItem = req.url.match(/^\/buttons\/games\/pins\/([^/]+)$/);
+    if ((req.method === "PUT" || req.method === "DELETE") && pinItem && !link.down) {
+      const index = link.buttons.findIndex((b) => b.id === "games");
+      const item = link.library.items.find((i) => i.id === pinItem[1]);
+      res.setHeader("Content-Type", "application/json");
+      if (!item) {
+        res.statusCode = 404;
+        return res.end(JSON.stringify({ error: "not_found", message: "no such game" }));
+      }
+      const others = link.buttons[index].state.pins.filter((p) => p.id !== item.id);
+      const pins = req.method === "PUT" ? [...others, { id: item.id, name: item.name }] : others;
+      link.buttons[index] = libraryButton(pins);
+      broadcast({ type: "button", button: link.buttons[index] });
+      return res.end(JSON.stringify({ button: link.buttons[index] }));
     }
     const icon = req.url.match(/^\/buttons\/([^/]+)\/icon$/);
     if (req.method === "GET" && icon) {

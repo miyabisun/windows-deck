@@ -37,11 +37,30 @@ At the right end of the tab row:
 Buttons with an icon in windows-link (an exe's or a shortcut's Windows icon) show it next
 to their label.
 
+## Game library
+
+A windows-link `steam.library` button opens your Steam library in a dialog covering 80% of
+the screen:
+
+- Type in the search field at the top to narrow the games by name (every word must
+  match; full-width and half-width letters and case do not matter).
+- The chips below it are your Steam collections; tap them to narrow the list (a game in
+  any selected collection shows). Games in a collection the button hides (`hide` in
+  windows-link, for example `outdate`) show only while that chip is selected.
+- Tap a game to start it (or bring it to the front when it runs; a game that is not
+  installed opens Steam's install dialog). The dialog closes.
+- Long-press a game to pin it to the tab: pinned games follow the tab's buttons as tiles
+  with the game's picture. Tap one to start it; long-press it to take it off.
+
+Esc, tapping outside the dialog, or its close button closes it. When windows-link cannot
+list the games you own (for example without a Steam Web API key) the dialog lists the
+installed ones and says why.
+
 ## Requirements
 
 - Windows 10 or 11 (x64) with the WebView2 runtime (included in Windows 11)
 - windows-link 0.1.3 or later running on the same PC (it allows this panel's window to
-  read its API)
+  read its API); the game library needs 0.1.6 or later
 - To build: Rust 1.96 (selected by `rust-toolchain.toml`) with the MSVC toolchain, and
   Node.js 24
 

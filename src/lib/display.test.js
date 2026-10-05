@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { describeState, pressFailure, switchFailure } from "./display.js";
+import { describeState, libraryFailure, pressFailure, switchFailure } from "./display.js";
 
 describe("describeState", () => {
   it("shows the current output device and notes a disconnected alternative", () => {
@@ -163,5 +163,25 @@ describe("launch and game buttons", () => {
     expect(pressFailure(500, { error: "launch", message: "cannot open x" })).toBe(
       "起動できませんでした: cannot open x",
     );
+  });
+});
+
+describe("library buttons", () => {
+  it("say that a press opens the list", () => {
+    expect(describeState({ kind: "library", pins: [] })).toEqual({
+      text: "一覧を開く",
+      note: null,
+      failed: false,
+    });
+  });
+
+  it("explain a failed start or pin", () => {
+    expect(libraryFailure(404, { error: "not_found" })).toBe(
+      "ライブラリにこのゲームがありません（一覧を開き直してください）",
+    );
+    expect(libraryFailure(500, { error: "launch", message: "denied" })).toBe(
+      "起動できませんでした: denied",
+    );
+    expect(libraryFailure(null, null)).toBe("windows-link に届きませんでした");
   });
 });

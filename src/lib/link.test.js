@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { Link } from "./link.svelte.js";
+import { Link, itemKey } from "./link.svelte.js";
 
 class FakeSocket {
   static all = [];
@@ -289,5 +289,62 @@ describe("Link desktop files and sleep", () => {
     expect(t.requests[0].init.method).toBe("POST");
     t.reply(202, { sleeping: true });
     expect(await slept).toBe(true);
+  });
+});
+
+describe("Link libraries", () => {
+  let t;
+  const library = (pins) => ({
+    id: "games",
+    type: "steam.library",
+    label: "ゲーム検索",
+    state: { kind: "library", pins },
+  });
+  const sf6 = { id: "1364780", name: "Street Fighter 6" };
+  beforeEach(() => {
+    t = setup();
+    t.link.start();
+    t.socket().send({ type: "snapshot", buttons: [library([])], desktops: [] });
+  });
+
+  it("reads a library button's games", async () => {
+    const read = t.link.library("games");
+    expect(t.requests[0].url).toBe("http://127.0.0.1:4730/buttons/games/library");
+    const body = { items: [], labels: [], hide: [], partial: null };
+    t.reply(200, body);
+    expect(await read).toEqual({ library: body, failure: null });
+
+    const failed = t.link.library("games");
+    t.fail();
+    expect(await failed).toEqual({ library: null, failure: "windows-link に届きませんでした" });
+  });
+
+  it("starts a game, showing it as pending, and keeps a failure on it", async () => {
+    let started = t.link.startItem("games", "1364780");
+    expect(t.requests[0].url).toBe("http://127.0.0.1:4730/buttons/games/library/1364780/start");
+    expect(t.requests[0].init.method).toBe("POST");
+    expect(t.link.pending[itemKey("games", "1364780")]).toBe(true);
+    t.reply(204, null);
+    expect(await started).toBe(true);
+    expect(t.link.pending[itemKey("games", "1364780")]).toBeUndefined();
+
+    started = t.link.startItem("games", "1364780");
+    t.reply(500, { error: "launch", message: "denied" });
+    expect(await started).toBe(false);
+    expect(t.link.failures[itemKey("games", "1364780")]).toBe("起動できませんでした: denied");
+  });
+
+  it("pins and unpins a game and takes the button's new state", async () => {
+    const pinned = t.link.setPinned("games", "1364780", true);
+    expect(t.requests[0].url).toBe("http://127.0.0.1:4730/buttons/games/pins/1364780");
+    expect(t.requests[0].init.method).toBe("PUT");
+    t.reply(200, { button: library([sf6]) });
+    expect(await pinned).toBeNull();
+    expect(t.link.buttons[0].state.pins).toEqual([sf6]);
+
+    const unpinned = t.link.setPinned("games", "1364780", false);
+    expect(t.requests[1].init.method).toBe("DELETE");
+    t.reply(404, { error: "not_found", message: "no such game" });
+    expect(await unpinned).toBe("ライブラリにこのゲームがありません（一覧を開き直してください）");
   });
 });

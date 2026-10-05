@@ -1,19 +1,29 @@
 <script>
   import Spinner from "./Spinner.svelte";
   import { describeState } from "./display.js";
+  import { longpress } from "./longpress.js";
 
-  /** @type {{ button: any, icon?: string | null, pending?: boolean, failure?: string, disabled?: boolean, onpress: () => void }} */
+  /** @type {{ button: { id: string, label: string, state?: any }, icon?: string | null, cover?: string | null, note?: string | null, pending?: boolean, failure?: string, disabled?: boolean, onpress: () => void, onlong?: (() => void) | null }} */
   let {
     button,
     icon = null,
+    cover = undefined,
+    note: extra = null,
     pending = false,
     failure = undefined,
     disabled = false,
     onpress,
+    onlong = null,
   } = $props();
 
-  const shown = $derived(describeState(button.state));
+  // A game tile (any `cover`, even null) shows the game's picture and name instead of a
+  // button state.
+  const game = $derived(cover !== undefined);
+  const shown = $derived(
+    game ? { text: null, note: extra, failed: false } : describeState(button.state),
+  );
   const note = $derived(failure ?? shown.note);
+  let broken = $state(false);
   // After a tap the browser keeps :hover and :active on the tile, so the highlight follows
   // the pointer events instead: hover only for a mouse, pressed only while held down.
   let pointer = $state("mouse");
@@ -23,6 +33,7 @@
 <button
   type="button"
   class="tile"
+  class:game
   class:mouse={pointer === "mouse"}
   class:held
   class:failed={failure || shown.failed}
@@ -37,17 +48,25 @@
   aria-busy={pending}
   aria-disabled={disabled}
   data-button={button.id}
+  use:longpress={disabled ? null : onlong}
   onclick={() => {
     if (!disabled) onpress();
   }}
 >
-  <span class="head">
-    {#if icon}
-      <img class="picture" src={icon} alt="" draggable="false" />
+  {#if game}
+    {#if cover && !broken}
+      <img class="cover" src={cover} alt="" draggable="false" onerror={() => (broken = true)} />
     {/if}
     <span class="label">{button.label}</span>
-  </span>
-  <span class="state">{shown.text}</span>
+  {:else}
+    <span class="head">
+      {#if icon}
+        <img class="picture" src={icon} alt="" draggable="false" />
+      {/if}
+      <span class="label">{button.label}</span>
+    </span>
+    <span class="state">{shown.text}</span>
+  {/if}
   {#if note}
     <span class="note" class:failure={failure || shown.failed}>{note}</span>
   {/if}
@@ -88,6 +107,29 @@
 
     &.failed
       border-color: var(--c-danger)
+
+  // The picture runs to the edges; the name and note keep the usual inset.
+  .game
+    gap: 0
+    padding: 0
+    overflow: hidden
+
+    .label
+      padding: var(--sp-3) var(--sp-4) var(--sp-2)
+
+    .note
+      padding: 0 var(--sp-4) var(--sp-3)
+
+    .busy
+      padding: var(--sp-1)
+      border-radius: 50%
+      background: var(--c-surface-raised)
+
+  .cover
+    display: block
+    width: 100%
+    aspect-ratio: 460 / 215
+    object-fit: cover
 
   .head
     display: flex
