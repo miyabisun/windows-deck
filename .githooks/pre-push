@@ -9,14 +9,17 @@ pushed=
 while read -r _local_ref local_sha remote_ref _remote_sha; do
   case "$remote_ref" in
     refs/heads/main | refs/tags/v*)
-      [ "$local_sha" != "$zero" ] && pushed=$(git rev-parse "$local_sha^{commit}")
+      if [ "$local_sha" != "$zero" ]; then
+        # Anything unexpected refuses the push rather than skipping the checks.
+        pushed=$(git rev-parse "$local_sha^{commit}") || exit 1
+      fi
       ;;
   esac
 done
 [ -z "$pushed" ] && exit 0
 
 # A release tag pushed right after its commit passed need not run the checks again.
-mark="$(git rev-parse --git-common-dir)/verified-commit"
+mark="$(git rev-parse --git-common-dir)/verified-commit" || exit 1
 [ "$pushed" = "$(cat "$mark" 2>/dev/null)" ] && exit 0
 
 # The checks run on the working tree, so it has to be exactly what is pushed.
