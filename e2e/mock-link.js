@@ -54,7 +54,7 @@ export const dlsiteButton = (pins = []) => ({
   desktop: null,
   except: [],
   icon: false,
-  state: { kind: "library", pins, pictures: "icon" },
+  state: { kind: "library", pins, pictures: "whole" },
 });
 
 /**
@@ -62,17 +62,18 @@ export const dlsiteButton = (pins = []) => ({
  * "c3" has none.
  */
 export function initialDlsite() {
-  const game = (id, name, detail, choosable = false) => ({
+  const game = (id, name, detail, choosable = false, image = null) => ({
     id,
     name,
     detail,
     choosable,
+    image,
     installed: true,
     labels: [],
   });
   return {
     items: [
-      game("a1", "湿度の高い夏のマゾ", "3Djp_Art"),
+      game("a1", "湿度の高い夏のマゾ", "3Djp_Art", false, "/dlsite-art/a1.svg"),
       game("b2", "催眠アプリ", "Saimin Soft", true),
       game("c3", "壊れたゲーム", "Other"),
     ],
@@ -200,6 +201,12 @@ export async function startMockLink() {
       res.statusCode = 202;
       res.setHeader("Content-Type", "application/json");
       return res.end(JSON.stringify({ sleeping: true }));
+    }
+    if (req.method === "GET" && req.url.startsWith("/dlsite-art/")) {
+      res.setHeader("Content-Type", "image/svg+xml");
+      return res.end(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="560" height="420"><rect width="560" height="420" fill="#2e86c1"/></svg>',
+      );
     }
     const dl = req.url.match(
       /^\/buttons\/dlsite\/library(?:\/([^/]+)\/(start|programs|program|image))?$/,

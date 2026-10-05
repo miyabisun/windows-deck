@@ -72,8 +72,9 @@ list the games you own (for example without a Steam Web API key) the dialog list
 installed ones and says why. Enter in the search field starts the first game found.
 
 A `dlsite.library` button opens the DLsite games in DLsiteNest's folders the same way.
-Their pictures are the games' program icons, shown whole, and the maker shows under the
-title and can be searched. A game with several programs asks once which one starts it
+Their pictures are the works' DLsite art (or, for games windows-link has not matched to a
+work, their program icons), shown whole, and the maker shows under the title and can be
+searched. A game with several programs asks once which one starts it
 (the choice is remembered); its menu has **起動ファイルを選ぶ** to change it. Its labels are
 kept by windows-link, so they work without Steam.
 
@@ -81,7 +82,7 @@ kept by windows-link, so they work without Steam.
 
 - Windows 10 or 11 (x64) with the WebView2 runtime (included in Windows 11)
 - windows-link 0.1.3 or later running on the same PC (it allows this panel's window to
-  read its API); the Steam library needs 0.1.6 or later, the DLsite library 0.1.9 or later
+  read its API); the Steam library needs 0.1.6 or later, the DLsite library 0.1.9 or later (0.1.10 for its art)
 - To build: Rust 1.96 (selected by `rust-toolchain.toml`) with the MSVC toolchain, and
   Node.js 24
 

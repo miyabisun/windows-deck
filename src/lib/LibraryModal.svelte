@@ -51,8 +51,9 @@
   // From the button's live state, so a pin made here shows at once.
   const pinned = $derived(new Set((button.state?.pins ?? []).map((/** @type {any} */ p) => p.id)));
   const disabled = $derived(link.status !== "connected");
-  // DLsite games show their program's icon whole; Steam games fill the tile with art.
-  const whole = $derived(button.state?.pictures === "icon");
+  // DLsite's pictures (4:3 art, or a program's icon) are shown whole; Steam's wide art
+  // fills the tile.
+  const whole = $derived(button.state?.pictures === "whole");
   /** @type {any} the game whose program is being chosen before it starts */
   let choosing = $state(null);
   const locked = $derived(labelsLockedReason(library?.labels_locked ?? null));
@@ -252,7 +253,7 @@
           {#each shown as item (item.id)}
             <Tile
               button={{ id: item.id, label: item.name }}
-              cover={pictureUrl(link.base, button.id, item.id)}
+              cover={item.image ?? pictureUrl(link.base, button.id, item.id)}
               {whole}
               note={noteOf(item)}
               pending={!!link.pending[itemKey(button.id, item.id)]}

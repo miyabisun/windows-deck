@@ -38,7 +38,9 @@ test("games show their icon whole and their maker, and the maker can be searched
     .poll(() => names(page))
     .toEqual(["湿度の高い夏のマゾ", "催眠アプリ", "壊れたゲーム"]);
   await expect(game(page, "a1")).toContainText("3Djp_Art");
-  const picture = game(page, "a1").locator("img.cover");
+  // A game known on DLsite shows its art from the address the library gave.
+  await expect(game(page, "a1").locator("img.cover")).toHaveAttribute("src", "/dlsite-art/a1.svg");
+  const picture = game(page, "b2").locator("img.cover");
   await expect(picture).toHaveClass(/whole/);
   expect(await picture.evaluate((img) => getComputedStyle(img).objectFit)).toBe("contain");
   await expect(picture).toHaveAttribute("loading", "lazy");

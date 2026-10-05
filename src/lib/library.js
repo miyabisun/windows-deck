@@ -95,8 +95,8 @@ export function pictureUrl(base, button, item) {
  * The games pinned to the library buttons among `buttons`, in button order; a tab shows
  * them after its buttons.
  * @param {Array<{ id: string, state?: any }>} buttons
- * @returns {Array<{ button: string, pin: { id: string, name: string }, icon: boolean }>}
- *   `icon` when the pictures are program icons to show whole
+ * @returns {Array<{ button: string, pin: { id: string, name: string }, whole: boolean }>}
+ *   `whole` when the pictures are shown whole rather than filling the tile
  */
 export function pinsOf(buttons) {
   return buttons.flatMap((b) =>
@@ -104,7 +104,7 @@ export function pinsOf(buttons) {
       ? (b.state.pins ?? []).map((/** @type {any} */ pin) => ({
           button: b.id,
           pin,
-          icon: b.state.pictures === "icon",
+          whole: b.state.pictures === "whole",
         }))
       : [],
   );

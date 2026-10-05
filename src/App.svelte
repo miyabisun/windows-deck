@@ -122,11 +122,11 @@
             button.state?.kind === "library" ? (opened = button.id) : link.press(button.id)}
         />
       {/each}
-      {#each pins as { button, pin, icon } (itemKey(button, pin.id))}
+      {#each pins as { button, pin, whole } (itemKey(button, pin.id))}
         <Tile
           button={{ id: itemKey(button, pin.id), label: pin.name }}
           cover={pictureUrl(link.base, button, pin.id)}
-          whole={icon}
+          {whole}
           pending={!!link.pending[itemKey(button, pin.id)]}
           failure={link.failures[itemKey(button, pin.id)]}
           disabled={link.status !== "connected"}

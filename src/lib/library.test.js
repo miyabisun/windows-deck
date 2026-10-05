@@ -126,12 +126,12 @@ describe("pinsOf", () => {
     const buttons = [
       { id: "games", state: { kind: "library", pins: [pin("1"), pin("2")], pictures: "cover" } },
       { id: "output", state: { kind: "output" } },
-      { id: "more", state: { kind: "library", pins: [pin("3")], pictures: "icon" } },
+      { id: "more", state: { kind: "library", pins: [pin("3")], pictures: "whole" } },
     ];
     expect(pinsOf(buttons)).toEqual([
-      { button: "games", pin: pin("1"), icon: false },
-      { button: "games", pin: pin("2"), icon: false },
-      { button: "more", pin: pin("3"), icon: true },
+      { button: "games", pin: pin("1"), whole: false },
+      { button: "games", pin: pin("2"), whole: false },
+      { button: "more", pin: pin("3"), whole: true },
     ]);
   });
 });
