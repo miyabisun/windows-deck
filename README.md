@@ -37,6 +37,14 @@ At the right end of the tab row:
 Buttons with an icon in windows-link (an exe's or a shortcut's Windows icon) show it next
 to their label.
 
+## Mute and mixer
+
+- A **mute** button (`audio.mute_toggle`) mutes the Windows output, or unmutes it, and shows
+  which.
+- A **mixer** button (`audio.mixer`) shows the volume and opens the mixer: the whole volume
+  on top, then each application that has sound; tap where a slider should be, or slide it.
+  Moving the whole volume unmutes it.
+
 ## Game library
 
 A windows-link `steam.library` button opens your Steam library in a dialog covering 80% of

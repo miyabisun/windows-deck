@@ -3,10 +3,48 @@ import {
   describeState,
   labelFailure,
   keysFailure,
+  mixerFailure,
   libraryFailure,
   pressFailure,
   switchFailure,
 } from "./display.js";
+
+describe("describeState of the mute button and the mixer", () => {
+  it("says what a press does and the volume", () => {
+    expect(describeState({ kind: "mute", muted: false, volume: 0.45 })).toEqual({
+      text: "ミュート",
+      note: "音量 45%",
+      failed: false,
+    });
+    expect(describeState({ kind: "mute", muted: true, volume: 0.45 })).toEqual({
+      text: "ミュート解除",
+      note: "ミュート中",
+      failed: false,
+    });
+    expect(describeState({ kind: "mixer", muted: false, volume: 0.45 })).toEqual({
+      text: "音量 45%",
+      note: null,
+      failed: false,
+    });
+    expect(describeState({ kind: "mixer", muted: true, volume: 0.45 })).toEqual({
+      text: "音量 45%",
+      note: "ミュート中",
+      failed: false,
+    });
+  });
+});
+
+describe("mixerFailure", () => {
+  it("says why the mixer cannot read or change a volume", () => {
+    expect(mixerFailure(404, { error: "not_found" })).toBe(
+      "このアプリは今は音を出していません（ミキサーを開き直してください）",
+    );
+    expect(mixerFailure(500, { error: "audio", message: "no device" })).toBe(
+      "音量を操作できません: no device",
+    );
+    expect(mixerFailure(null, null)).toBe("windows-link に届きませんでした");
+  });
+});
 
 describe("describeState", () => {
   it("shows the current output device and notes a disconnected alternative", () => {

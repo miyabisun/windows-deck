@@ -3,6 +3,7 @@
   import DesktopTabs from "./lib/DesktopTabs.svelte";
   import GameMenu from "./lib/GameMenu.svelte";
   import LibraryModal from "./lib/LibraryModal.svelte";
+  import MixerModal from "./lib/MixerModal.svelte";
   import ProgramChooser from "./lib/ProgramChooser.svelte";
   import Spinner from "./lib/Spinner.svelte";
   import Tile from "./lib/Tile.svelte";
@@ -25,6 +26,8 @@
   const pins = $derived(pinsOf(visible));
   /** @type {string | null} the library button whose list is open */
   let opened = $state(null);
+  /** whether the mixer is open */
+  let mixing = $state(false);
   const openedButton = $derived(link?.buttons.find((b) => b.id === opened) ?? null);
   /** @type {{ button: string, pin: { id: string, name: string }, x: number, y: number } | null} the pinned game whose menu is open */
   let pinMenu = $state(null);
@@ -119,7 +122,11 @@
           failure={link.failures[button.id]}
           disabled={link.status !== "connected"}
           onpress={() =>
-            button.state?.kind === "library" ? (opened = button.id) : link.press(button.id)}
+            button.state?.kind === "library"
+              ? (opened = button.id)
+              : button.state?.kind === "mixer"
+                ? (mixing = true)
+                : link.press(button.id)}
         />
       {/each}
       {#each pins as { button, pin, whole } (itemKey(button, pin.id))}
@@ -140,6 +147,10 @@
 
 {#if link && openedButton}
   <LibraryModal {link} button={openedButton} onclose={() => (opened = null)} />
+{/if}
+
+{#if link && mixing}
+  <MixerModal {link} onclose={() => (mixing = false)} />
 {/if}
 
 {#if link && pinChoice}

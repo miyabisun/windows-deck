@@ -3,6 +3,7 @@
 
 import {
   keysFailure,
+  mixerFailure,
   labelFailure,
   libraryFailure,
   pressFailure,
@@ -192,6 +193,42 @@ export class Link {
     return status === 0
       ? { programs: body, failure: null }
       : { programs: null, failure: libraryFailure(status, body) };
+  }
+
+  /**
+   * The default output's volume and the apps with sound on it.
+   * @returns {Promise<{ mixer: any, failure: string | null }>}
+   */
+  async mixer() {
+    const { status, body } = await this.#call("GET", "/audio/mixer");
+    return status === 0
+      ? { mixer: body, failure: null }
+      : { mixer: null, failure: mixerFailure(status, body) };
+  }
+
+  /**
+   * Change the default output's volume and/or mute; answers the mixer.
+   * @param {{ volume?: number, muted?: boolean }} change
+   * @returns {Promise<{ mixer: any, failure: string | null }>}
+   */
+  async setMaster(change) {
+    const { status, body } = await this.#call("PUT", "/audio/master", change);
+    return status === 0
+      ? { mixer: body, failure: null }
+      : { mixer: null, failure: mixerFailure(status, body) };
+  }
+
+  /**
+   * Change one program's volume; answers the mixer.
+   * @returns {Promise<{ mixer: any, failure: string | null }>}
+   */
+  async setAppVolume(process, volume) {
+    const { status, body } = await this.#call("PUT", `/audio/apps/${encodeURIComponent(process)}`, {
+      volume,
+    });
+    return status === 0
+      ? { mixer: body, failure: null }
+      : { mixer: null, failure: mixerFailure(status, body) };
   }
 
   /**

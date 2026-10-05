@@ -46,6 +46,35 @@ export const libraryButton = (pins = []) => ({
   state: { kind: "library", pins },
 });
 
+/** The default output's volume and the apps with sound, as `GET /audio/mixer` gives them. */
+export const initialMixer = () => ({
+  master: { volume: 0.45, muted: false },
+  apps: [
+    { process: "Discord.exe", name: "Discord", volume: 1 },
+    { process: "StreetFighter6.exe", name: "StreetFighter6", volume: 0.2 },
+  ],
+});
+
+/** The mute button and the mixer button, following `master`. */
+export const muteButton = (master) => ({
+  id: "mute",
+  type: "audio.mute_toggle",
+  label: "ミュート",
+  desktop: null,
+  except: [],
+  icon: false,
+  state: { kind: "mute", ...master },
+});
+export const mixerButton = (master) => ({
+  id: "mixer",
+  type: "audio.mixer",
+  label: "ミキサー",
+  desktop: null,
+  except: [],
+  icon: false,
+  state: { kind: "mixer", ...master },
+});
+
 /** A `dlsite.library` button, whose pictures are program icons. */
 export const dlsiteButton = (pins = []) => ({
   id: "dlsite",
@@ -140,6 +169,7 @@ export async function startMockLink() {
     pins: [],
     library: initialLibrary(),
     dlsite: initialDlsite(),
+    mixer: initialMixer(),
     /** @type {string[]} games started from a library */
     started: [],
     /** @type {string[]} games whose folder was opened */
@@ -344,6 +374,55 @@ export async function startMockLink() {
       link.pins.push(pin[1]);
       res.setHeader("Content-Type", "application/json");
       return res.end(JSON.stringify({ pinned: true }));
+    }
+    // The mute and mixer buttons follow the master volume.
+    const masterChanged = () => {
+      for (const [index, button] of link.buttons.entries()) {
+        const next =
+          button.id === "mute"
+            ? muteButton(link.mixer.master)
+            : button.id === "mixer"
+              ? mixerButton(link.mixer.master)
+              : null;
+        if (next) {
+          link.buttons[index] = next;
+          broadcast({ type: "button", button: next });
+        }
+      }
+    };
+    if (req.url === "/audio/mixer" && req.method === "GET" && !link.down) {
+      res.setHeader("Content-Type", "application/json");
+      return res.end(JSON.stringify(link.mixer));
+    }
+    if (req.url === "/audio/master" && req.method === "PUT" && !link.down) {
+      const change = await readJson(req);
+      if (change.volume !== undefined) {
+        link.mixer.master.volume = change.volume;
+        link.mixer.master.muted = false;
+      }
+      if (change.muted !== undefined) link.mixer.master.muted = change.muted;
+      masterChanged();
+      res.setHeader("Content-Type", "application/json");
+      return res.end(JSON.stringify(link.mixer));
+    }
+    const appVolume = req.url.match(/^\/audio\/apps\/([^/]+)$/);
+    if (appVolume && req.method === "PUT" && !link.down) {
+      const { volume } = await readJson(req);
+      const app = link.mixer.apps.find((a) => a.process === decodeURIComponent(appVolume[1]));
+      res.setHeader("Content-Type", "application/json");
+      if (!app) {
+        res.statusCode = 404;
+        return res.end(JSON.stringify({ error: "not_found", message: "no sound" }));
+      }
+      app.volume = volume;
+      return res.end(JSON.stringify(link.mixer));
+    }
+    if (req.url === "/buttons/mute/press" && req.method === "POST" && !link.down) {
+      link.presses.push("mute");
+      link.mixer.master.muted = !link.mixer.master.muted;
+      masterChanged();
+      res.setHeader("Content-Type", "application/json");
+      return res.end(JSON.stringify({ button: link.buttons.find((b) => b.id === "mute") }));
     }
     const press = req.url.match(/^\/buttons\/([^/]+)\/press$/);
     if (req.method === "POST" && press && !link.down) {

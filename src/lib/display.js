@@ -40,6 +40,16 @@ export function describeState(state) {
         : { text: "起動", note: null, failed: false };
     case "library":
       return { text: "一覧を開く", note: null, failed: false };
+    case "mute":
+      return state.muted
+        ? { text: "ミュート解除", note: "ミュート中", failed: false }
+        : { text: "ミュート", note: `音量 ${Math.round(state.volume * 100)}%`, failed: false };
+    case "mixer":
+      return {
+        text: `音量 ${Math.round(state.volume * 100)}%`,
+        note: state.muted ? "ミュート中" : null,
+        failed: false,
+      };
     case "error":
       return { text: "状態を読めません", note: state.message ?? null, failed: true };
     default:
@@ -98,6 +108,18 @@ export function libraryFailure(status, body) {
   if (body?.error === "not_found")
     return "ライブラリにこのゲームがありません（一覧を開き直してください）";
   if (body?.error === "not_downloaded") return `まだこの PC にありません（${body.message}）`;
+  return pressFailure(status, body);
+}
+
+/**
+ * The reason shown when the mixer cannot read or change a volume.
+ * @param {number | null} status HTTP status, or null when the request did not get an answer
+ * @param {any} body the JSON error body, if any
+ */
+export function mixerFailure(status, body) {
+  if (body?.error === "not_found")
+    return "このアプリは今は音を出していません（ミキサーを開き直してください）";
+  if (body?.error === "audio") return `音量を操作できません: ${body.message}`;
   return pressFailure(status, body);
 }
 
