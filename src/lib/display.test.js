@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { describeState, libraryFailure, pressFailure, switchFailure } from "./display.js";
+import {
+  describeState,
+  labelFailure,
+  libraryFailure,
+  pressFailure,
+  switchFailure,
+} from "./display.js";
 
 describe("describeState", () => {
   it("shows the current output device and notes a disconnected alternative", () => {
@@ -183,5 +189,20 @@ describe("library buttons", () => {
       "起動できませんでした: denied",
     );
     expect(libraryFailure(null, null)).toBe("windows-link に届きませんでした");
+  });
+});
+
+describe("labelFailure", () => {
+  it("says why a label could not be changed", () => {
+    expect(
+      labelFailure(409, { error: "labels_unavailable", message: "Steam が起動していません" }),
+    ).toBe("ラベルを変更できません: Steam が起動していません");
+    expect(
+      labelFailure(400, { error: "invalid_label", message: 'a label named "RPG" exists' }),
+    ).toBe('ラベルを変更できません: a label named "RPG" exists');
+    expect(labelFailure(404, { error: "not_found" })).toBe(
+      "ラベルかゲームが見つかりません（一覧を開き直してください）",
+    );
+    expect(labelFailure(null, null)).toBe("windows-link に届きませんでした");
   });
 });

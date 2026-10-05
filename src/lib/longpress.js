@@ -6,10 +6,11 @@ export const LONG_PRESS_MS = 500;
 const SLOP_PX = 10;
 
 /**
- * Svelte action: call `onlong` when a pointer stays down `LONG_PRESS_MS` without
- * moving. The click that ends that press is swallowed so it does not also tap.
+ * Svelte action: call `onlong` with where the press is when a pointer stays down
+ * `LONG_PRESS_MS` without moving. The click that ends that press is swallowed so it
+ * does not also tap.
  * @param {HTMLElement} node
- * @param {(() => void) | null} onlong
+ * @param {((point: { x: number, y: number }) => void) | null} onlong
  */
 export function longpress(node, onlong) {
   /** @type {ReturnType<typeof setTimeout> | null} */
@@ -30,7 +31,7 @@ export function longpress(node, onlong) {
     timer = setTimeout(() => {
       timer = null;
       fired = true;
-      onlong?.();
+      onlong?.({ ...origin });
     }, LONG_PRESS_MS);
   };
   const move = (/** @type {PointerEvent} */ event) => {
@@ -54,7 +55,7 @@ export function longpress(node, onlong) {
   for (const [type, fn] of listeners) node.addEventListener(type, /** @type {any} */ (fn));
   node.addEventListener("click", click, true);
   return {
-    /** @param {(() => void) | null} next */
+    /** @param {((point: { x: number, y: number }) => void) | null} next */
     update(next) {
       onlong = next;
     },

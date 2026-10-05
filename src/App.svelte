@@ -1,6 +1,7 @@
 <script>
   import { onMount } from "svelte";
   import DesktopTabs from "./lib/DesktopTabs.svelte";
+  import GameMenu from "./lib/GameMenu.svelte";
   import LibraryModal from "./lib/LibraryModal.svelte";
   import Spinner from "./lib/Spinner.svelte";
   import Tile from "./lib/Tile.svelte";
@@ -24,6 +25,8 @@
   /** @type {string | null} the library button whose list is open */
   let opened = $state(null);
   const openedButton = $derived(link?.buttons.find((b) => b.id === opened) ?? null);
+  /** @type {{ button: string, pin: { id: string, name: string }, x: number, y: number } | null} the pinned game whose menu is open */
+  let pinMenu = $state(null);
 
   onMount(() => {
     // A long press would open the WebView's context menu.
@@ -119,7 +122,7 @@
           failure={link.failures[itemKey(button, pin.id)]}
           disabled={link.status !== "connected"}
           onpress={() => link.startItem(button, pin.id)}
-          onlong={() => link.setPinned(button, pin.id, false)}
+          onlong={(point) => (pinMenu = { button, pin, ...point })}
         />
       {/each}
     </div>
@@ -128,6 +131,18 @@
 
 {#if link && openedButton}
   <LibraryModal {link} button={openedButton} onclose={() => (opened = null)} />
+{/if}
+
+{#if link && pinMenu}
+  <GameMenu
+    {link}
+    button={pinMenu.button}
+    item={pinMenu.pin}
+    pinned
+    x={pinMenu.x}
+    y={pinMenu.y}
+    onclose={() => (pinMenu = null)}
+  />
 {/if}
 
 <style lang="sass">

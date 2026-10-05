@@ -38,6 +38,18 @@ export function partialReason(reason) {
 }
 
 /**
+ * Why labels cannot be changed right now, in words the user can act on.
+ * @param {string | null} reason windows-link's `labels_locked` or an error message
+ */
+export function labelsLockedReason(reason) {
+  if (!reason) return null;
+  if (reason.includes("not running")) return "Steam が起動していないため、ラベルは変更できません";
+  if (reason.includes("cef-enable-remote-debugging"))
+    return "Steam の操作口が無効なため、ラベルは変更できません（Steam フォルダに .cef-enable-remote-debugging を置いて Steam を再起動）";
+  return `ラベルを変更できません: ${reason}`;
+}
+
+/**
  * Where windows-link serves a library game's picture.
  * @param {string} base windows-link URL
  * @param {string} button the library button's ID

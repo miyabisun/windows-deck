@@ -44,13 +44,23 @@ the screen:
 
 - Type in the search field at the top to narrow the games by name (every word must
   match; full-width and half-width letters and case do not matter).
-- The chips below it are your Steam collections; tap them to narrow the list (a game in
-  any selected collection shows). Games in a collection the button hides (`hide` in
-  windows-link, for example `outdate`) show only while that chip is selected.
+- The chips below it are your labels (Steam's favorites and hidden, and your own
+  collections); tap them to narrow the list (a game in any selected label shows). Games in
+  a label the button hides (`hide` in windows-link, for example `非表示`) show only while
+  that chip is selected.
+- **+** at the end of the chips makes a label. Long-press a chip to rename or delete it
+  (deleting asks first and keeps the games; Steam's own labels cannot be renamed or
+  deleted).
 - Tap a game to start it (or bring it to the front when it runs; a game that is not
   installed opens Steam's install dialog). The dialog closes.
-- Long-press a game to pin it to the tab: pinned games follow the tab's buttons as tiles
-  with the game's picture. Tap one to start it; long-press it to take it off.
+- Long-press a game for its menu: **TOPに固定** pins it to the tab, where pinned games
+  follow the tab's buttons as tiles with the game's picture; **ローカルファイル閲覧** opens
+  its install folder; **ラベル設定** lists the labels with a check for each, to put the game
+  in or take it out, and makes a new one. A pinned tile starts its game when tapped, and
+  its long-press menu has **TOPから外す**.
+
+Changing labels needs windows-link to reach the Steam client (see windows-link's README,
+"Labels"); until then the panel says why and leaves the label controls off.
 
 Esc, tapping outside the dialog, or its close button closes it. When windows-link cannot
 list the games you own (for example without a Steam Web API key) the dialog lists the

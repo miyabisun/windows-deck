@@ -1,10 +1,14 @@
 <script>
   import { onMount } from "svelte";
+  import AskDialog from "./AskDialog.svelte";
+  import ContextMenu from "./ContextMenu.svelte";
+  import GameMenu from "./GameMenu.svelte";
   import Icon from "./Icon.svelte";
   import Spinner from "./Spinner.svelte";
   import Tile from "./Tile.svelte";
-  import { partialReason, pictureUrl, visibleItems } from "./library.js";
+  import { labelsLockedReason, partialReason, pictureUrl, visibleItems } from "./library.js";
   import { itemKey } from "./link.svelte.js";
+  import { longpress } from "./longpress.js";
 
   const NOTICE_MS = 3000;
 
@@ -13,7 +17,7 @@
 
   /** @type {HTMLDialogElement | undefined} */
   let dialog = $state();
-  /** @type {{ items: any[], labels: string[], hide: string[], partial: string | null } | null} */
+  /** @type {{ items: any[], labels: Array<{ id: string, name: string, editable: boolean }>, hide: string[], partial: string | null, labels_locked: string | null } | null} */
   let library = $state(null);
   /** @type {string | null} */
   let failure = $state(null);
@@ -24,6 +28,12 @@
   let notice = $state(null);
   /** @type {ReturnType<typeof setTimeout> | undefined} */
   let noticeTimer;
+  /** @type {{ item: any, x: number, y: number } | null} the game whose menu is open */
+  let gameMenu = $state(null);
+  /** @type {{ label: any, x: number, y: number } | null} the label whose menu is open */
+  let labelMenu = $state(null);
+  /** @type {{ kind: "create" } | { kind: "rename" | "delete", label: any } | null} */
+  let asking = $state(null);
 
   const shown = $derived(
     library ? visibleItems(library.items, { query, active, hide: library.hide }) : [],
@@ -31,16 +41,61 @@
   // From the button's live state, so a pin made here shows at once.
   const pinned = $derived(new Set((button.state?.pins ?? []).map((/** @type {any} */ p) => p.id)));
   const disabled = $derived(link.status !== "connected");
+  const locked = $derived(labelsLockedReason(library?.labels_locked ?? null));
+
+  async function load() {
+    const read = await link.library(button.id);
+    library = read.library;
+    failure = read.failure;
+    // Forget selected labels that no longer exist.
+    const ids = new Set((read.library?.labels ?? []).map((/** @type {any} */ l) => l.id));
+    active = active.filter((id) => ids.has(id));
+  }
 
   onMount(() => {
     // A modal dialog keeps the focus inside and starts it on the search field.
     dialog?.showModal();
-    link.library(button.id).then((read) => {
-      library = read.library;
-      failure = read.failure;
-    });
+    load();
     return () => clearTimeout(noticeTimer);
   });
+
+  /** @param {string} text */
+  function tell(text) {
+    notice = text;
+    clearTimeout(noticeTimer);
+    noticeTimer = setTimeout(() => (notice = null), NOTICE_MS);
+  }
+
+  /** Run a label change, then show its failure or read the library again. */
+  async function changeLabels(/** @type {Promise<string | null>} */ change) {
+    const failed = await change;
+    if (failed) tell(failed);
+    await load();
+  }
+
+  // These take the label first: closing the dialog drops `asking`, which the dialog's
+  // label comes from.
+  /** @param {any} label @param {string} name */
+  function rename(label, name) {
+    const { id } = label;
+    asking = null;
+    changeLabels(link.renameLabel(button.id, id, name));
+  }
+
+  /** @param {any} label */
+  function remove(label) {
+    const { id } = label;
+    asking = null;
+    changeLabels(link.deleteLabel(button.id, id));
+  }
+
+  /** @param {string} name */
+  async function create(name) {
+    asking = null;
+    const made = await link.createLabel(button.id, name);
+    if (made.failure) tell(made.failure);
+    await load();
+  }
 
   /** @param {string} label */
   function toggle(label) {
@@ -50,17 +105,6 @@
   /** @param {any} item */
   async function start(item) {
     if (await link.startItem(button.id, item.id)) onclose();
-  }
-
-  /** @param {any} item */
-  async function togglePin(item) {
-    const pin = !pinned.has(item.id);
-    const failed = await link.setPinned(button.id, item.id, pin);
-    // A failure stays on the game's tile instead.
-    if (failed) return;
-    notice = `「${item.name}」を TOP ${pin ? "に固定しました" : "から外しました"}`;
-    clearTimeout(noticeTimer);
-    noticeTimer = setTimeout(() => (notice = null), NOTICE_MS);
   }
 
   /** @param {any} item */
@@ -98,21 +142,33 @@
         <Icon name="close" />
       </button>
     </div>
-    {#if library?.labels.length}
+    {#if library}
       <div class="chips" role="group" aria-label="ラベルで絞り込む">
-        {#each library.labels as label (label)}
+        {#each library.labels as label (label.id)}
           <button
             type="button"
             class="chip"
-            aria-pressed={active.includes(label)}
-            onclick={() => toggle(label)}
+            aria-pressed={active.includes(label.id)}
+            data-label={label.id}
+            use:longpress={(point) => (labelMenu = { label, ...point })}
+            onclick={() => toggle(label.id)}
           >
-            {#if active.includes(label)}
+            {#if active.includes(label.id)}
               <Icon name="check" />
             {/if}
-            {label}
+            {label.name}
           </button>
         {/each}
+        <button
+          type="button"
+          class="chip add"
+          aria-label="ラベルを作る"
+          disabled={!!locked}
+          title={locked ?? undefined}
+          onclick={() => (asking = { kind: "create" })}
+        >
+          <Icon name="plus" />
+        </button>
       </div>
     {/if}
     {#if partialReason(library?.partial ?? null)}
@@ -135,7 +191,7 @@
               failure={link.failures[itemKey(button.id, item.id)]}
               {disabled}
               onpress={() => start(item)}
-              onlong={() => togglePin(item)}
+              onlong={(point) => (gameMenu = { item, ...point })}
             />
           {:else}
             <p class="quiet">見つかりません</p>
@@ -145,6 +201,70 @@
     </div>
   </div>
 </dialog>
+
+{#if gameMenu}
+  <GameMenu
+    {link}
+    button={button.id}
+    item={gameMenu.item}
+    pinned={pinned.has(gameMenu.item.id)}
+    x={gameMenu.x}
+    y={gameMenu.y}
+    onclose={() => (gameMenu = null)}
+    onchange={load}
+    onnotice={tell}
+  />
+{/if}
+
+{#if labelMenu}
+  <ContextMenu
+    x={labelMenu.x}
+    y={labelMenu.y}
+    title={labelMenu.label.name}
+    items={[
+      {
+        label: "名前変更",
+        disabled: !labelMenu.label.editable || !!locked,
+        onselect: () => (asking = { kind: "rename", label: labelMenu?.label }),
+      },
+      {
+        label: "削除",
+        disabled: !labelMenu.label.editable || !!locked,
+        onselect: () => (asking = { kind: "delete", label: labelMenu?.label }),
+      },
+    ]}
+    onclose={() => (labelMenu = null)}
+  />
+{/if}
+
+{#if asking?.kind === "create"}
+  <AskDialog
+    title="新しいラベル"
+    value=""
+    confirm="作る"
+    onconfirm={create}
+    oncancel={() => (asking = null)}
+  />
+{:else if asking?.kind === "rename"}
+  {@const label = asking.label}
+  <AskDialog
+    title="ラベルの名前変更"
+    value={label.name}
+    confirm="変更する"
+    onconfirm={(name) => rename(label, name)}
+    oncancel={() => (asking = null)}
+  />
+{:else if asking?.kind === "delete"}
+  {@const label = asking.label}
+  <AskDialog
+    title={`「${label.name}」を削除しますか？`}
+    message="ラベルだけを消します。ゲームはライブラリに残ります。"
+    confirm="削除する"
+    danger
+    onconfirm={() => remove(label)}
+    oncancel={() => (asking = null)}
+  />
+{/if}
 
 <style lang="sass">
   .library
@@ -233,6 +353,17 @@
       border-color: var(--c-accent)
       background: var(--c-accent-subtle)
       font-weight: 600
+
+    &:disabled
+      opacity: 0.5
+      cursor: default
+
+  // The "+" that makes a label: a round chip as tall as the others.
+  .add
+    justify-content: center
+    width: 56px
+    padding: 0
+    font-size: var(--fs-state)
 
   @media (hover: hover)
     .close:hover,

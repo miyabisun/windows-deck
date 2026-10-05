@@ -1,7 +1,7 @@
 // Connection to windows-link: the button list and states from the `/events` socket,
 // presses over HTTP, and automatic reconnection.
 
-import { libraryFailure, pressFailure, switchFailure } from "./display.js";
+import { labelFailure, libraryFailure, pressFailure, switchFailure } from "./display.js";
 
 /** The `pending` and `failures` key of a library game. */
 export const itemKey = (/** @type {string} */ id, /** @type {string} */ item) => `${id}/${item}`;
@@ -199,6 +199,84 @@ export class Link {
     } catch {
       return libraryFailure(null, null);
     }
+  }
+
+  /**
+   * One request to windows-link that answers with JSON or nothing.
+   * @param {string} method
+   * @param {string} path
+   * @param {any} [body] sent as JSON
+   * @returns {Promise<{ status: number | null, body: any }>} status null when nothing answered
+   */
+  async #call(method, path, body) {
+    try {
+      const response = await this.#env.fetch(`${this.#base}${path}`, {
+        method,
+        ...(body === undefined
+          ? {}
+          : { headers: { "content-type": "application/json" }, body: JSON.stringify(body) }),
+      });
+      const answer = await response.json().catch(() => null);
+      return { status: response.ok ? 0 : response.status, body: answer };
+    } catch {
+      return { status: null, body: null };
+    }
+  }
+
+  /**
+   * Show an installed library game's folder in Explorer.
+   * @returns {Promise<string | null>} why it failed, if it did
+   */
+  async openFolder(id, item) {
+    const { status, body } = await this.#call(
+      "POST",
+      `/buttons/${encodeURIComponent(id)}/library/${encodeURIComponent(item)}/folder`,
+    );
+    if (status === 0) return null;
+    return body?.error === "not_found"
+      ? "このゲームはインストールされていません"
+      : libraryFailure(status, body);
+  }
+
+  /**
+   * Make a label in a library.
+   * @returns {Promise<{ label: any, failure: string | null }>}
+   */
+  async createLabel(id, name) {
+    const { status, body } = await this.#call("POST", `/buttons/${encodeURIComponent(id)}/labels`, {
+      name,
+    });
+    return status === 0
+      ? { label: body?.label ?? null, failure: null }
+      : { label: null, failure: labelFailure(status, body) };
+  }
+
+  /** @returns {Promise<string | null>} why it failed, if it did */
+  async renameLabel(id, label, name) {
+    const { status, body } = await this.#call(
+      "PATCH",
+      `/buttons/${encodeURIComponent(id)}/labels/${encodeURIComponent(label)}`,
+      { name },
+    );
+    return status === 0 ? null : labelFailure(status, body);
+  }
+
+  /** Delete a label; its games stay. @returns {Promise<string | null>} why it failed, if it did */
+  async deleteLabel(id, label) {
+    const { status, body } = await this.#call(
+      "DELETE",
+      `/buttons/${encodeURIComponent(id)}/labels/${encodeURIComponent(label)}`,
+    );
+    return status === 0 ? null : labelFailure(status, body);
+  }
+
+  /** Put a game in a label or take it out. @returns {Promise<string | null>} why it failed, if it did */
+  async setLabel(id, label, item, on) {
+    const { status, body } = await this.#call(
+      on ? "PUT" : "DELETE",
+      `/buttons/${encodeURIComponent(id)}/labels/${encodeURIComponent(label)}/items/${encodeURIComponent(item)}`,
+    );
+    return status === 0 ? null : labelFailure(status, body);
   }
 
   /** Ask windows-link to switch Windows to a desktop; one switch at a time. */

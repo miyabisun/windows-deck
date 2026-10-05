@@ -46,24 +46,35 @@ export const libraryButton = (pins = []) => ({
   state: { kind: "library", pins },
 });
 
-/** The games behind `libraryButton`. */
+/** The games behind `libraryButton`; labels name their games by ID. */
 export function initialLibrary() {
   const game = (id, name, labels, installed = true) => ({ id, name, installed, labels });
   return {
     items: [
-      game("1364780", "Street Fighter™ 6", ["お気に入り"]),
+      game("1364780", "Street Fighter™ 6", ["favorite"]),
       game("646570", "Slay the Spire", []),
-      game("2868840", "Slay the Spire 2", ["R15"], false),
-      game("1039890", "METAL SLUG", ["outdate"]),
+      game("2868840", "Slay the Spire 2", ["uc-r15"], false),
+      game("1039890", "METAL SLUG", ["hidden"]),
     ],
-    labels: ["お気に入り", "R15", "outdate"],
-    hide: ["outdate"],
+    labels: [
+      { id: "favorite", name: "お気に入り", editable: false },
+      { id: "hidden", name: "非表示", editable: false },
+      { id: "uc-r15", name: "R15", editable: true },
+    ],
+    hide: ["hidden"],
     partial: null,
+    labels_locked: null,
   };
 }
 
 export function initialButtons() {
   return [output("motu"), volume(1)];
+}
+
+async function readJson(req) {
+  const chunks = [];
+  for await (const chunk of req) chunks.push(chunk);
+  return JSON.parse(Buffer.concat(chunks).toString("utf8"));
 }
 
 export async function startMockLink() {
@@ -87,6 +98,8 @@ export async function startMockLink() {
     library: initialLibrary(),
     /** @type {string[]} games started from a library */
     started: [],
+    /** @type {string[]} games whose folder was opened */
+    folders: [],
   };
   const sockets = new Set();
   const broadcast = (message) => {
@@ -96,7 +109,7 @@ export async function startMockLink() {
   const server = http.createServer(async (req, res) => {
     res.setHeader("Access-Control-Allow-Origin", "*");
     if (req.method === "OPTIONS") {
-      res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE");
+      res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE");
       res.setHeader("Access-Control-Allow-Headers", "content-type");
       res.statusCode = 204;
       return res.end();
@@ -185,6 +198,48 @@ export async function startMockLink() {
       link.buttons[index] = libraryButton(pins);
       broadcast({ type: "button", button: link.buttons[index] });
       return res.end(JSON.stringify({ button: link.buttons[index] }));
+    }
+    const folder = req.url.match(/^\/buttons\/games\/library\/([^/]+)\/folder$/);
+    if (req.method === "POST" && folder && !link.down) {
+      const item = link.library.items.find((i) => i.id === folder[1]);
+      if (!item?.installed) {
+        res.statusCode = 404;
+        res.setHeader("Content-Type", "application/json");
+        return res.end(JSON.stringify({ error: "not_found", message: "not installed" }));
+      }
+      link.folders.push(item.id);
+      res.statusCode = 204;
+      return res.end();
+    }
+    if (req.method === "POST" && req.url === "/buttons/games/labels" && !link.down) {
+      const { name } = await readJson(req);
+      const label = { id: `uc-${link.library.labels.length + 1}`, name, editable: true };
+      link.library.labels.push(label);
+      res.statusCode = 201;
+      res.setHeader("Content-Type", "application/json");
+      return res.end(JSON.stringify({ label }));
+    }
+    const label = req.url.match(/^\/buttons\/games\/labels\/([^/]+)$/);
+    if (label && !link.down && (req.method === "PATCH" || req.method === "DELETE")) {
+      const id = decodeURIComponent(label[1]);
+      if (req.method === "PATCH") {
+        const { name } = await readJson(req);
+        link.library.labels.find((l) => l.id === id).name = name;
+      } else {
+        link.library.labels = link.library.labels.filter((l) => l.id !== id);
+        for (const item of link.library.items) item.labels = item.labels.filter((l) => l !== id);
+      }
+      res.statusCode = 204;
+      return res.end();
+    }
+    const member = req.url.match(/^\/buttons\/games\/labels\/([^/]+)\/items\/([^/]+)$/);
+    if (member && !link.down && (req.method === "PUT" || req.method === "DELETE")) {
+      const id = decodeURIComponent(member[1]);
+      const item = link.library.items.find((i) => i.id === member[2]);
+      item.labels = item.labels.filter((l) => l !== id);
+      if (req.method === "PUT") item.labels.push(id);
+      res.statusCode = 204;
+      return res.end();
     }
     const icon = req.url.match(/^\/buttons\/([^/]+)\/icon$/);
     if (req.method === "GET" && icon) {

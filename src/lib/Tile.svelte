@@ -3,7 +3,7 @@
   import { describeState } from "./display.js";
   import { longpress } from "./longpress.js";
 
-  /** @type {{ button: { id: string, label: string, state?: any }, icon?: string | null, cover?: string | null, note?: string | null, pending?: boolean, failure?: string, disabled?: boolean, onpress: () => void, onlong?: (() => void) | null }} */
+  /** @type {{ button: { id: string, label: string, state?: any }, icon?: string | null, cover?: string | null, note?: string | null, pending?: boolean, failure?: string, disabled?: boolean, onpress: () => void, onlong?: ((point: { x: number, y: number }) => void) | null }} */
   let {
     button,
     icon = null,

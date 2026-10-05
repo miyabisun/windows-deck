@@ -347,4 +347,53 @@ describe("Link libraries", () => {
     t.reply(404, { error: "not_found", message: "no such game" });
     expect(await unpinned).toBe("ライブラリにこのゲームがありません（一覧を開き直してください）");
   });
+
+  it("opens a game's folder", async () => {
+    const opened = t.link.openFolder("games", "1364780");
+    expect(t.requests[0].url).toBe("http://127.0.0.1:4730/buttons/games/library/1364780/folder");
+    expect(t.requests[0].init.method).toBe("POST");
+    t.reply(204, null);
+    expect(await opened).toBeNull();
+
+    const missing = t.link.openFolder("games", "2");
+    t.reply(404, { error: "not_found", message: "the game is not installed" });
+    expect(await missing).toBe("このゲームはインストールされていません");
+  });
+
+  it("creates, renames and deletes labels", async () => {
+    const created = t.link.createLabel("games", "RPG");
+    expect(t.requests[0].url).toBe("http://127.0.0.1:4730/buttons/games/labels");
+    expect(t.requests[0].init.method).toBe("POST");
+    expect(JSON.parse(t.requests[0].init.body)).toEqual({ name: "RPG" });
+    const label = { id: "uc-9", name: "RPG", editable: true };
+    t.reply(201, { label });
+    expect(await created).toEqual({ label, failure: null });
+
+    const renamed = t.link.renameLabel("games", "uc-9", "JRPG");
+    expect(t.requests[1].url).toBe("http://127.0.0.1:4730/buttons/games/labels/uc-9");
+    expect(t.requests[1].init.method).toBe("PATCH");
+    expect(JSON.parse(t.requests[1].init.body)).toEqual({ name: "JRPG" });
+    t.reply(204, null);
+    expect(await renamed).toBeNull();
+
+    const deleted = t.link.deleteLabel("games", "uc-9");
+    expect(t.requests[2].init.method).toBe("DELETE");
+    t.reply(409, { error: "labels_unavailable", message: "Steam が起動していません" });
+    expect(await deleted).toBe("ラベルを変更できません: Steam が起動していません");
+  });
+
+  it("puts a game in a label and takes it out", async () => {
+    const added = t.link.setLabel("games", "hidden", "1364780", true);
+    expect(t.requests[0].url).toBe(
+      "http://127.0.0.1:4730/buttons/games/labels/hidden/items/1364780",
+    );
+    expect(t.requests[0].init.method).toBe("PUT");
+    t.reply(204, null);
+    expect(await added).toBeNull();
+
+    const removed = t.link.setLabel("games", "hidden", "1364780", false);
+    expect(t.requests[1].init.method).toBe("DELETE");
+    t.fail();
+    expect(await removed).toBe("windows-link に届きませんでした");
+  });
 });

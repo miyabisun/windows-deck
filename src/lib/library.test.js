@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { partialReason, pictureUrl, pinsOf, visibleItems } from "./library.js";
+import { labelsLockedReason, partialReason, pictureUrl, pinsOf, visibleItems } from "./library.js";
 
 const item = (id, name, labels = []) => ({ id, name, labels, installed: true });
 
@@ -50,6 +50,19 @@ describe("partialReason", () => {
     expect(partialReason("the Steam Web API cannot be reached: timeout")).toContain(
       "the Steam Web API cannot be reached: timeout",
     );
+  });
+});
+
+describe("labelsLockedReason", () => {
+  it("says in Japanese why labels cannot be changed", () => {
+    expect(labelsLockedReason(null)).toBeNull();
+    expect(labelsLockedReason("Steam is not running")).toContain("Steam が起動していない");
+    expect(
+      labelsLockedReason(
+        "Steam does not accept remote control: create .cef-enable-remote-debugging in the Steam folder and restart Steam",
+      ),
+    ).toContain(".cef-enable-remote-debugging を置いて");
+    expect(labelsLockedReason("timeout")).toBe("ラベルを変更できません: timeout");
   });
 });
 

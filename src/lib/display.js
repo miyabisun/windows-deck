@@ -1,5 +1,7 @@
 // What a button shows for a windows-link state, and why a press failed.
 
+import { labelsLockedReason } from "./library.js";
+
 const UNKNOWN = { text: "状態不明", note: null, failed: false };
 
 /**
@@ -93,6 +95,20 @@ export function pressFailure(status, body) {
 export function libraryFailure(status, body) {
   if (body?.error === "not_found")
     return "ライブラリにこのゲームがありません（一覧を開き直してください）";
+  return pressFailure(status, body);
+}
+
+/**
+ * The reason shown after a label could not be created, renamed, deleted or filled.
+ * @param {number | null} status HTTP status, or null when the request did not get an answer
+ * @param {any} body the JSON error body, if any
+ */
+export function labelFailure(status, body) {
+  if (body?.error === "not_found")
+    return "ラベルかゲームが見つかりません（一覧を開き直してください）";
+  if (body?.error === "labels_unavailable") return labelsLockedReason(body.message);
+  if (body?.error === "invalid_label" || body?.error === "labels")
+    return `ラベルを変更できません: ${body.message}`;
   return pressFailure(status, body);
 }
 
