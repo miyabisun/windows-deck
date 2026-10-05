@@ -87,7 +87,7 @@
     white-space: nowrap
 
   .item
-    min-height: 56px
+    min-height: var(--row-height)
     padding: 0 var(--sp-4)
     border: 0
     background: transparent

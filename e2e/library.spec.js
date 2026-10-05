@@ -18,6 +18,13 @@ const dialog = (page) => page.getByRole("dialog", { name: "ゲーム検索" });
 const game = (page, id) => dialog(page).locator(`[data-button="${id}"]`);
 const names = (page) => dialog(page).locator(".tile .label").allTextContents();
 
+/** Every row is at least as tall as a desktop tab, for a finger. */
+async function expectTabTall(page, rows) {
+  const tab = (await page.getByRole("tab").first().boundingBox()).height;
+  expect(rows.length).toBeGreaterThan(0);
+  for (const row of rows) expect((await row.boundingBox()).height).toBeGreaterThanOrEqual(tab);
+}
+
 /** Hold the mouse down on a locator long enough for a long press. */
 async function longPress(page, locator) {
   const box = await locator.boundingBox();
@@ -92,6 +99,7 @@ test("a game's menu pins it to the tab, where its menu takes it off", async ({ p
   await page.locator('[data-button="games"]').click();
   await longPress(page, game(page, "646570"));
   await expect(page.getByRole("menu", { name: "Slay the Spire" })).toBeVisible();
+  await expectTabTall(page, await page.getByRole("menuitem").all());
   await page.screenshot({ path: "test-results/library-game-menu.png" });
   await menuItem(page, "TOPに固定").click();
   await expect(dialog(page).getByRole("status")).toHaveText(
@@ -137,6 +145,10 @@ test("a game's labels are set from its menu, including a new one", async ({ page
   await expect(picker).toContainText("ラベル設定: Slay the Spire");
   const box = (name) => picker.getByRole("checkbox", { name });
   await expect(box("非表示")).toHaveAttribute("aria-checked", "false");
+  await expectTabTall(page, [
+    ...(await picker.getByRole("checkbox").all()),
+    picker.getByRole("button", { name: "新しいラベル" }),
+  ]);
   await box("非表示").click();
   await expect(box("非表示")).toHaveAttribute("aria-checked", "true");
   expect(mock.link.library.items[1].labels).toEqual(["hidden"]);

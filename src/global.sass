@@ -26,6 +26,9 @@
   // A button's minimum size; the tabs are half of it.
   --tile-width: 240px
   --tile-height: 144px
+  // A row to choose from (menus, label lists): as tall as a tab, since a finger is wide
+  // and lands roughly.
+  --row-height: calc(var(--tile-height) / 2)
 
 @media (prefers-color-scheme: light)
   \:root

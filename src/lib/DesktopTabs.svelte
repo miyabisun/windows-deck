@@ -230,7 +230,7 @@
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25)
 
   .item
-    min-height: 56px
+    min-height: var(--row-height)
     padding: 0 var(--sp-4)
     border: 0
     background: transparent

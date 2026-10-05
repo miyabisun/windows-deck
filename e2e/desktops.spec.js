@@ -169,6 +169,10 @@ test("the + button creates a desktop for a desktop file that has none", async ({
   mock.link.unmatched = ["SF6"];
   await open(page);
   await page.getByRole("button", { name: "デスクトップを作る" }).click();
+  // A menu row is as tall as a tab, for a finger.
+  const tab = (await page.getByRole("tab").first().boundingBox()).height;
+  const row = (await page.getByRole("menuitem", { name: "SF6" }).boundingBox()).height;
+  expect(row).toBeGreaterThanOrEqual(tab);
   await page.getByRole("menuitem", { name: "SF6" }).click();
   await expect(selected(page)).toHaveText("SF6");
   await page.getByRole("button", { name: "デスクトップを作る" }).click();

@@ -207,7 +207,7 @@
     display: flex
     align-items: center
     gap: var(--sp-3)
-    min-height: 56px
+    min-height: var(--row-height)
     padding: 0 var(--sp-2)
     border: 0
     border-radius: var(--radius-md)
