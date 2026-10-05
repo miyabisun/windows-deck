@@ -392,6 +392,8 @@ export async function startMockLink() {
 
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const { port } = /** @type {import("node:net").AddressInfo} */ (server.address());
+  // The art lives on the mock, like DLsite's on its own host.
+  link.dlsite.items[0].image = `http://127.0.0.1:${port}/dlsite-art/a1.svg`;
 
   return {
     link,
