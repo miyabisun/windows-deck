@@ -18,6 +18,33 @@ describe("visibleItems", () => {
     expect(ids(visibleItems(items, {}))).toEqual(["1", "2", "3", "4", "5"]);
   });
 
+  it("also finds names whose letters come in the typed order, after the plain matches (like fzf)", () => {
+    const games = [
+      { id: "a", name: "Slay the Spire", labels: [] },
+      { id: "b", name: "Street Fighter 6", labels: [] },
+      { id: "c", name: "催眠アプリで彼女に完全堕ち", labels: [] },
+      { id: "d", name: "Spire", labels: [] },
+    ];
+    // "sts" and "stf" are in no name, but their letters come in order in one each.
+    expect(ids(visibleItems(games, { query: "sts" }))).toEqual(["a"]);
+    expect(ids(visibleItems(games, { query: "stf" }))).toEqual(["b"]);
+    // A plain match comes before the scattered ones, each keeping the list's order.
+    expect(ids(visibleItems(games, { query: "spire" }))).toEqual(["a", "d"]);
+    expect(ids(visibleItems(games, { query: "sre" }))).toEqual(["a", "b", "d"]);
+    expect(ids(visibleItems(games, { query: "催アプ" }))).toEqual(["c"]);
+    expect(ids(visibleItems(games, { query: "zz" }))).toEqual([]);
+  });
+
+  it("matches the detail (the maker) as well as the name", () => {
+    const games = [
+      { id: "a", name: "夏のマゾ", detail: "3Djp_Art", labels: [] },
+      { id: "b", name: "Other", detail: "Somebody", labels: [] },
+    ];
+    expect(ids(visibleItems(games, { query: "3djp" }))).toEqual(["a"]);
+    expect(ids(visibleItems(games, { query: "3djp 夏" }))).toEqual(["a"]);
+    expect(ids(visibleItems(games, { query: "3djp other" }))).toEqual([]);
+  });
+
   it("matches every word of the query in the name, ignoring case and width", () => {
     expect(ids(visibleItems(items, { query: "spire" }))).toEqual(["2", "3"]);
     expect(ids(visibleItems(items, { query: "spire 2" }))).toEqual(["3"]);
@@ -50,6 +77,11 @@ describe("partialReason", () => {
     expect(partialReason("the Steam Web API cannot be reached: timeout")).toContain(
       "the Steam Web API cannot be reached: timeout",
     );
+    // DLsite's folder.
+    expect(partialReason("D:\\DLsiteNest\\Game does not exist")).toBe(
+      "ゲームのフォルダ D:\\DLsiteNest\\Game がありません",
+    );
+    expect(partialReason("there are no games in D:\\Games")).toBe("D:\\Games にゲームがありません");
   });
 });
 
@@ -79,14 +111,14 @@ describe("pinsOf", () => {
   it("lists the pins of the library buttons in button order", () => {
     const pin = (id) => ({ id, name: id });
     const buttons = [
-      { id: "games", state: { kind: "library", pins: [pin("1"), pin("2")] } },
+      { id: "games", state: { kind: "library", pins: [pin("1"), pin("2")], pictures: "cover" } },
       { id: "output", state: { kind: "output" } },
-      { id: "more", state: { kind: "library", pins: [pin("3")] } },
+      { id: "more", state: { kind: "library", pins: [pin("3")], pictures: "icon" } },
     ];
     expect(pinsOf(buttons)).toEqual([
-      { button: "games", pin: pin("1") },
-      { button: "games", pin: pin("2") },
-      { button: "more", pin: pin("3") },
+      { button: "games", pin: pin("1"), icon: false },
+      { button: "games", pin: pin("2"), icon: false },
+      { button: "more", pin: pin("3"), icon: true },
     ]);
   });
 });

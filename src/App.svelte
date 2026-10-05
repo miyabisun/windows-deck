@@ -3,6 +3,7 @@
   import DesktopTabs from "./lib/DesktopTabs.svelte";
   import GameMenu from "./lib/GameMenu.svelte";
   import LibraryModal from "./lib/LibraryModal.svelte";
+  import ProgramChooser from "./lib/ProgramChooser.svelte";
   import Spinner from "./lib/Spinner.svelte";
   import Tile from "./lib/Tile.svelte";
   import { pictureUrl, pinsOf } from "./lib/library.js";
@@ -27,6 +28,13 @@
   const openedButton = $derived(link?.buttons.find((b) => b.id === opened) ?? null);
   /** @type {{ button: string, pin: { id: string, name: string }, x: number, y: number } | null} the pinned game whose menu is open */
   let pinMenu = $state(null);
+  /** @type {{ button: string, pin: { id: string, name: string } } | null} the pinned game whose program is being chosen */
+  let pinChoice = $state(null);
+
+  /** @param {string} button @param {{ id: string, name: string }} pin */
+  async function startPin(button, pin) {
+    if ((await link?.startItem(button, pin.id)) === "choose") pinChoice = { button, pin };
+  }
 
   onMount(() => {
     // A long press would open the WebView's context menu.
@@ -114,14 +122,15 @@
             button.state?.kind === "library" ? (opened = button.id) : link.press(button.id)}
         />
       {/each}
-      {#each pins as { button, pin } (itemKey(button, pin.id))}
+      {#each pins as { button, pin, icon } (itemKey(button, pin.id))}
         <Tile
           button={{ id: itemKey(button, pin.id), label: pin.name }}
           cover={pictureUrl(link.base, button, pin.id)}
+          whole={icon}
           pending={!!link.pending[itemKey(button, pin.id)]}
           failure={link.failures[itemKey(button, pin.id)]}
           disabled={link.status !== "connected"}
-          onpress={() => link.startItem(button, pin.id)}
+          onpress={() => startPin(button, pin)}
           onlong={(point) => (pinMenu = { button, pin, ...point })}
         />
       {/each}
@@ -131,6 +140,16 @@
 
 {#if link && openedButton}
   <LibraryModal {link} button={openedButton} onclose={() => (opened = null)} />
+{/if}
+
+{#if link && pinChoice}
+  <ProgramChooser
+    {link}
+    button={pinChoice.button}
+    item={pinChoice.pin}
+    start
+    onclose={() => (pinChoice = null)}
+  />
 {/if}
 
 {#if link && pinMenu}

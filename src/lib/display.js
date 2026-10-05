@@ -93,6 +93,8 @@ export function pressFailure(status, body) {
  * @param {any} body the JSON error body, if any
  */
 export function libraryFailure(status, body) {
+  if (body?.error === "no_program")
+    return "起動できるファイルが見つかりません（ローカルファイル閲覧で中を確かめてください）";
   if (body?.error === "not_found")
     return "ライブラリにこのゲームがありません（一覧を開き直してください）";
   return pressFailure(status, body);

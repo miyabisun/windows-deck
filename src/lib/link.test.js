@@ -325,13 +325,34 @@ describe("Link libraries", () => {
     expect(t.requests[0].init.method).toBe("POST");
     expect(t.link.pending[itemKey("games", "1364780")]).toBe(true);
     t.reply(204, null);
-    expect(await started).toBe(true);
+    expect(await started).toBe("started");
     expect(t.link.pending[itemKey("games", "1364780")]).toBeUndefined();
 
     started = t.link.startItem("games", "1364780");
     t.reply(500, { error: "launch", message: "denied" });
-    expect(await started).toBe(false);
+    expect(await started).toBe("failed");
     expect(t.link.failures[itemKey("games", "1364780")]).toBe("起動できませんでした: denied");
+
+    // A game with several programs asks which one instead of failing.
+    started = t.link.startItem("games", "1364780");
+    t.reply(409, { error: "choose_program", message: "choose" });
+    expect(await started).toBe("choose");
+    expect(t.link.failures[itemKey("games", "1364780")]).toBeUndefined();
+  });
+
+  it("reads a game's programs and remembers the chosen one", async () => {
+    const read = t.link.programs("games", "abc");
+    expect(t.requests[0].url).toBe("http://127.0.0.1:4730/buttons/games/library/abc/programs");
+    const programs = { candidates: ["a.exe", "b.exe"], chosen: null };
+    t.reply(200, programs);
+    expect(await read).toEqual({ programs, failure: null });
+
+    const chosen = t.link.chooseProgram("games", "abc", "b.exe");
+    expect(t.requests[1].url).toBe("http://127.0.0.1:4730/buttons/games/library/abc/program");
+    expect(t.requests[1].init.method).toBe("PUT");
+    expect(JSON.parse(t.requests[1].init.body)).toEqual({ program: "b.exe" });
+    t.reply(204, null);
+    expect(await chosen).toBeNull();
   });
 
   it("pins and unpins a game and takes the button's new state", async () => {

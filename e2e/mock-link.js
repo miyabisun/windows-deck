@@ -46,6 +46,47 @@ export const libraryButton = (pins = []) => ({
   state: { kind: "library", pins },
 });
 
+/** A `dlsite.library` button, whose pictures are program icons. */
+export const dlsiteButton = (pins = []) => ({
+  id: "dlsite",
+  type: "dlsite.library",
+  label: "DLsite",
+  desktop: null,
+  except: [],
+  icon: false,
+  state: { kind: "library", pins, pictures: "icon" },
+});
+
+/**
+ * The games behind `dlsiteButton`: "a1" starts, "b2" has two programs to choose from,
+ * "c3" has none.
+ */
+export function initialDlsite() {
+  const game = (id, name, detail, choosable = false) => ({
+    id,
+    name,
+    detail,
+    choosable,
+    installed: true,
+    labels: [],
+  });
+  return {
+    items: [
+      game("a1", "湿度の高い夏のマゾ", "3Djp_Art"),
+      game("b2", "催眠アプリ", "Saimin Soft", true),
+      game("c3", "壊れたゲーム", "Other"),
+    ],
+    labels: [
+      { id: "favorite", name: "お気に入り", editable: false },
+      { id: "hidden", name: "非表示", editable: false },
+    ],
+    hide: ["hidden"],
+    partial: null,
+    labels_locked: null,
+    programs: { b2: { candidates: ["app.exe", "startup.exe"], chosen: null } },
+  };
+}
+
 /** The games behind `libraryButton`; labels name their games by ID. */
 export function initialLibrary() {
   const game = (id, name, labels, installed = true) => ({ id, name, installed, labels });
@@ -96,6 +137,7 @@ export async function startMockLink() {
     /** @type {string[]} */
     pins: [],
     library: initialLibrary(),
+    dlsite: initialDlsite(),
     /** @type {string[]} games started from a library */
     started: [],
     /** @type {string[]} games whose folder was opened */
@@ -158,6 +200,44 @@ export async function startMockLink() {
       res.statusCode = 202;
       res.setHeader("Content-Type", "application/json");
       return res.end(JSON.stringify({ sleeping: true }));
+    }
+    const dl = req.url.match(
+      /^\/buttons\/dlsite\/library(?:\/([^/]+)\/(start|programs|program|image))?$/,
+    );
+    if (dl && !link.down) {
+      const [, item, action] = dl;
+      const { programs, ...listing } = link.dlsite;
+      const json = (status, body) => {
+        res.statusCode = status;
+        res.setHeader("Content-Type", "application/json");
+        return res.end(body === undefined ? undefined : JSON.stringify(body));
+      };
+      if (!item)
+        return json(200, {
+          ...listing,
+          items: listing.items.map((i) => ({ ...i, pinned: false })),
+        });
+      if (action === "image") {
+        res.setHeader("Content-Type", "image/svg+xml");
+        return res.end(
+          '<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256"><circle cx="128" cy="128" r="120" fill="#c0392b"/></svg>',
+        );
+      }
+      if (action === "programs")
+        return programs[item] ? json(200, programs[item]) : json(404, { error: "not_found" });
+      if (action === "program") {
+        const { program } = await readJson(req);
+        programs[item].chosen = program;
+        res.statusCode = 204;
+        return res.end();
+      }
+      if (item === "c3")
+        return json(409, { error: "no_program", message: "it has no program to start" });
+      if (programs[item] && !programs[item].chosen)
+        return json(409, { error: "choose_program", message: "choose which program starts it" });
+      link.started.push(programs[item] ? `${item}:${programs[item].chosen}` : item);
+      res.statusCode = 204;
+      return res.end();
     }
     const picture = req.url.match(/^\/buttons\/games\/library\/(\d+)\/image$/);
     if (req.method === "GET" && picture) {

@@ -1,9 +1,10 @@
 <script>
   import ContextMenu from "./ContextMenu.svelte";
   import LabelPicker from "./LabelPicker.svelte";
+  import ProgramChooser from "./ProgramChooser.svelte";
   import { itemKey } from "./link.svelte.js";
 
-  /** @type {{ link: import("./link.svelte.js").Link, button: string, item: { id: string, name: string, installed?: boolean }, pinned: boolean, x: number, y: number, onclose: () => void, onchange?: () => void, onnotice?: (text: string) => void }} */
+  /** @type {{ link: import("./link.svelte.js").Link, button: string, item: { id: string, name: string, installed?: boolean, choosable?: boolean }, pinned: boolean, x: number, y: number, onclose: () => void, onchange?: () => void, onnotice?: (text: string) => void }} */
   let {
     link,
     button,
@@ -17,6 +18,7 @@
   } = $props();
 
   let picking = $state(false);
+  let choosing = $state(false);
 
   // The menu closes as soon as a choice is made, so each action reads what it needs
   // from the props before it waits.
@@ -38,6 +40,8 @@
 
 {#if picking}
   <LabelPicker {link} {button} {item} {onclose} {onchange} />
+{:else if choosing}
+  <ProgramChooser {link} {button} {item} {onclose} />
 {:else}
   <ContextMenu
     {x}
@@ -47,9 +51,12 @@
       { label: pinned ? "TOPから外す" : "TOPに固定", onselect: pin },
       { label: "ローカルファイル閲覧", disabled: item.installed === false, onselect: browse },
       { label: "ラベル設定", onselect: () => (picking = true) },
+      ...(item.choosable
+        ? [{ label: "起動ファイルを選ぶ", onselect: () => (choosing = true) }]
+        : []),
     ]}
     onclose={() => {
-      if (!picking) onclose();
+      if (!picking && !choosing) onclose();
     }}
   />
 {/if}

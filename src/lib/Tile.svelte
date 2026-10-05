@@ -3,11 +3,12 @@
   import { describeState } from "./display.js";
   import { longpress } from "./longpress.js";
 
-  /** @type {{ button: { id: string, label: string, state?: any }, icon?: string | null, cover?: string | null, note?: string | null, pending?: boolean, failure?: string, disabled?: boolean, onpress: () => void, onlong?: ((point: { x: number, y: number }) => void) | null }} */
+  /** @type {{ button: { id: string, label: string, state?: any }, icon?: string | null, cover?: string | null, whole?: boolean, note?: string | null, pending?: boolean, failure?: string, disabled?: boolean, onpress: () => void, onlong?: ((point: { x: number, y: number }) => void) | null }} */
   let {
     button,
     icon = null,
     cover = undefined,
+    whole = false,
     note: extra = null,
     pending = false,
     failure = undefined,
@@ -55,7 +56,15 @@
 >
   {#if game}
     {#if cover && !broken}
-      <img class="cover" src={cover} alt="" draggable="false" onerror={() => (broken = true)} />
+      <img
+        class="cover"
+        class:whole
+        src={cover}
+        alt=""
+        loading="lazy"
+        draggable="false"
+        onerror={() => (broken = true)}
+      />
     {/if}
     <span class="label">{button.label}</span>
   {:else}
@@ -130,6 +139,12 @@
     width: 100%
     aspect-ratio: 460 / 215
     object-fit: cover
+
+    // A program icon is shown whole, centred on the tile's own face.
+    &.whole
+      box-sizing: border-box
+      padding: var(--sp-3)
+      object-fit: contain
 
   .head
     display: flex

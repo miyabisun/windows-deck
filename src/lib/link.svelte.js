@@ -149,11 +149,12 @@ export class Link {
   /**
    * Start a library game, or bring it to the front when it runs. Ignored while it is
    * already starting; a failure stays under `itemKey` until the next try.
-   * @returns {Promise<boolean>} whether windows-link started it
+   * @returns {Promise<"started" | "choose" | "failed">} "choose" when the game has
+   *   several programs and none is chosen yet
    */
   async startItem(id, item) {
     const key = itemKey(id, item);
-    if (this.pending[key] || this.status !== "connected") return false;
+    if (this.pending[key] || this.status !== "connected") return "failed";
     this.pending[key] = true;
     delete this.failures[key];
     try {
@@ -161,15 +162,40 @@ export class Link {
         `${this.#base}/buttons/${encodeURIComponent(id)}/library/${encodeURIComponent(item)}/start`,
         { method: "POST" },
       );
-      if (response.ok) return true;
+      if (response.ok) return "started";
       const body = await response.json().catch(() => null);
+      if (body?.error === "choose_program") return "choose";
       this.failures[key] = libraryFailure(response.status, body);
     } catch {
       this.failures[key] = libraryFailure(null, null);
     } finally {
       delete this.pending[key];
     }
-    return false;
+    return "failed";
+  }
+
+  /**
+   * The programs a library game can start with, and the one in use.
+   * @returns {Promise<{ programs: { candidates: string[], chosen: string | null } | null, failure: string | null }>}
+   */
+  async programs(id, item) {
+    const { status, body } = await this.#call(
+      "GET",
+      `/buttons/${encodeURIComponent(id)}/library/${encodeURIComponent(item)}/programs`,
+    );
+    return status === 0
+      ? { programs: body, failure: null }
+      : { programs: null, failure: libraryFailure(status, body) };
+  }
+
+  /** Remember which program starts a game. @returns {Promise<string | null>} why it failed, if it did */
+  async chooseProgram(id, item, program) {
+    const { status, body } = await this.#call(
+      "PUT",
+      `/buttons/${encodeURIComponent(id)}/library/${encodeURIComponent(item)}/program`,
+      { program },
+    );
+    return status === 0 ? null : libraryFailure(status, body);
   }
 
   /**

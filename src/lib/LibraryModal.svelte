@@ -3,6 +3,7 @@
   import AskDialog from "./AskDialog.svelte";
   import ContextMenu from "./ContextMenu.svelte";
   import GameMenu from "./GameMenu.svelte";
+  import ProgramChooser from "./ProgramChooser.svelte";
   import Icon from "./Icon.svelte";
   import Spinner from "./Spinner.svelte";
   import Tile from "./Tile.svelte";
@@ -41,6 +42,10 @@
   // From the button's live state, so a pin made here shows at once.
   const pinned = $derived(new Set((button.state?.pins ?? []).map((/** @type {any} */ p) => p.id)));
   const disabled = $derived(link.status !== "connected");
+  // DLsite games show their program's icon whole; Steam games fill the tile with art.
+  const whole = $derived(button.state?.pictures === "icon");
+  /** @type {any} the game whose program is being chosen before it starts */
+  let choosing = $state(null);
   const locked = $derived(labelsLockedReason(library?.labels_locked ?? null));
 
   async function load() {
@@ -104,12 +109,15 @@
 
   /** @param {any} item */
   async function start(item) {
-    if (await link.startItem(button.id, item.id)) onclose();
+    const result = await link.startItem(button.id, item.id);
+    if (result === "started") onclose();
+    else if (result === "choose") choosing = item;
   }
 
   /** @param {any} item */
   function noteOf(item) {
     const notes = [];
+    if (item.detail) notes.push(item.detail);
     if (pinned.has(item.id)) notes.push("TOP に固定中");
     if (!item.installed) notes.push("未インストール（押すとインストール）");
     return notes.join("・") || null;
@@ -137,6 +145,10 @@
         placeholder="名前で探す"
         aria-label="名前で探す"
         bind:value={query}
+        onkeydown={(event) => {
+          // Enter starts the first game found, so a keyboard needs no pointer.
+          if (event.key === "Enter" && !event.isComposing && shown.length) start(shown[0]);
+        }}
       />
       <button type="button" class="close" aria-label="閉じる" onclick={onclose}>
         <Icon name="close" />
@@ -186,6 +198,7 @@
             <Tile
               button={{ id: item.id, label: item.name }}
               cover={pictureUrl(link.base, button.id, item.id)}
+              {whole}
               note={noteOf(item)}
               pending={!!link.pending[itemKey(button.id, item.id)]}
               failure={link.failures[itemKey(button.id, item.id)]}
@@ -213,6 +226,17 @@
     onclose={() => (gameMenu = null)}
     onchange={load}
     onnotice={tell}
+  />
+{/if}
+
+{#if choosing}
+  <ProgramChooser
+    {link}
+    button={button.id}
+    item={choosing}
+    start
+    onclose={() => (choosing = null)}
+    onstarted={onclose}
   />
 {/if}
 

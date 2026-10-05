@@ -189,6 +189,9 @@ describe("library buttons", () => {
       "起動できませんでした: denied",
     );
     expect(libraryFailure(null, null)).toBe("windows-link に届きませんでした");
+    expect(libraryFailure(409, { error: "no_program" })).toBe(
+      "起動できるファイルが見つかりません（ローカルファイル閲覧で中を確かめてください）",
+    );
   });
 });
 
