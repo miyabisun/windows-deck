@@ -1,5 +1,11 @@
 // Searching a windows-link game library (`GET /buttons/{id}/library`).
 
+/**
+ * The label that stands for "no label at all"; a list starts with it selected, so the
+ * games still to sort come first. Real label IDs never start with "@".
+ */
+export const UNLABELED = "@unlabeled";
+
 /** Fold full-width letters and case so that "ｓｔｒｅｅｔ" finds "Street". */
 const fold = (/** @type {string} */ text) => text.normalize("NFKC").toLowerCase();
 
@@ -19,7 +25,9 @@ export function visibleItems(items, { query = "", active = [], hide = [] }) {
   const plain = [];
   const scattered = [];
   for (const item of items) {
-    if (active.length && !item.labels.some((label) => active.includes(label))) continue;
+    const unlabeled = active.includes(UNLABELED) && item.labels.length === 0;
+    if (active.length && !unlabeled && !item.labels.some((label) => active.includes(label)))
+      continue;
     if (item.labels.some((label) => hide.includes(label) && !active.includes(label))) continue;
     const text = fold(item.detail ? `${item.name} ${item.detail}` : item.name);
     if (words.every((word) => text.includes(word))) plain.push(item);

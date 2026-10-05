@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { labelsLockedReason, partialReason, pictureUrl, pinsOf, visibleItems } from "./library.js";
+import {
+  UNLABELED,
+  labelsLockedReason,
+  partialReason,
+  pictureUrl,
+  pinsOf,
+  visibleItems,
+} from "./library.js";
 
 const item = (id, name, labels = []) => ({ id, name, labels, installed: true });
 
@@ -57,6 +64,12 @@ describe("visibleItems", () => {
   it("keeps games in any of the selected labels", () => {
     expect(ids(visibleItems(items, { active: ["お気に入り", "R15"] }))).toEqual(["2", "3", "5"]);
     expect(ids(visibleItems(items, { active: ["R15"], query: "spire" }))).toEqual(["3"]);
+  });
+
+  it("「ラベル非登録」 keeps the games without any label, alone or with other labels", () => {
+    expect(ids(visibleItems(items, { active: [UNLABELED], hide: ["outdate"] }))).toEqual(["1"]);
+    expect(ids(visibleItems(items, { active: [UNLABELED, "お気に入り"] }))).toEqual(["1", "2"]);
+    expect(ids(visibleItems(items, { active: [UNLABELED], query: "slay" }))).toEqual([]);
   });
 
   it("shows a hidden label's games only while that label is selected", () => {

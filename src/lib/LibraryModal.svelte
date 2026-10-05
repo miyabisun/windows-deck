@@ -7,7 +7,13 @@
   import Icon from "./Icon.svelte";
   import Spinner from "./Spinner.svelte";
   import Tile from "./Tile.svelte";
-  import { labelsLockedReason, partialReason, pictureUrl, visibleItems } from "./library.js";
+  import {
+    UNLABELED,
+    labelsLockedReason,
+    partialReason,
+    pictureUrl,
+    visibleItems,
+  } from "./library.js";
   import { itemKey } from "./link.svelte.js";
   import { longpress } from "./longpress.js";
 
@@ -24,7 +30,7 @@
   let failure = $state(null);
   let query = $state("");
   /** @type {string[]} */
-  let active = $state([]);
+  let active = $state([UNLABELED]);
   /** @type {string | null} what the last long press did, shown for a few seconds */
   let notice = $state(null);
   /** @type {ReturnType<typeof setTimeout> | undefined} */
@@ -53,7 +59,10 @@
     library = read.library;
     failure = read.failure;
     // Forget selected labels that no longer exist.
-    const ids = new Set((read.library?.labels ?? []).map((/** @type {any} */ l) => l.id));
+    const ids = new Set([
+      UNLABELED,
+      ...(read.library?.labels ?? []).map((/** @type {any} */ l) => l.id),
+    ]);
     active = active.filter((id) => ids.has(id));
   }
 
@@ -156,6 +165,18 @@
     </div>
     {#if library}
       <div class="chips" role="group" aria-label="ラベルで絞り込む">
+        <button
+          type="button"
+          class="chip"
+          aria-pressed={active.includes(UNLABELED)}
+          data-label={UNLABELED}
+          onclick={() => toggle(UNLABELED)}
+        >
+          {#if active.includes(UNLABELED)}
+            <Icon name="check" />
+          {/if}
+          ラベル非登録
+        </button>
         {#each library.labels as label (label.id)}
           <button
             type="button"

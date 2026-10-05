@@ -7,8 +7,8 @@ const SLOP_PX = 10;
 
 /**
  * Svelte action: call `onlong` with where the press is when a pointer stays down
- * `LONG_PRESS_MS` without moving. The click that ends that press is swallowed so it
- * does not also tap.
+ * `LONG_PRESS_MS` without moving, or on a right click (a mouse sorts faster). The click
+ * that ends a long press is swallowed so it does not also tap.
  * @param {HTMLElement} node
  * @param {((point: { x: number, y: number }) => void) | null} onlong
  */
@@ -45,7 +45,23 @@ export function longpress(node, onlong) {
     event.stopImmediatePropagation();
   };
 
+  const menu = (/** @type {MouseEvent} */ event) => {
+    // A touch long press also raises this; the timer above already handles that.
+    const kind = /** @type {any} */ (event).pointerType;
+    if (!onlong || kind === "touch" || kind === "pen") return;
+    event.preventDefault();
+    cancel();
+    let point = { x: event.clientX, y: event.clientY };
+    // The menu key and Shift+F10 come without a position: use the element's.
+    if (point.x === 0 && point.y === 0) {
+      const box = node.getBoundingClientRect();
+      point = { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+    }
+    onlong(point);
+  };
+
   const listeners = /** @type {const} */ ([
+    ["contextmenu", menu],
     ["pointerdown", down],
     ["pointermove", move],
     ["pointerup", cancel],

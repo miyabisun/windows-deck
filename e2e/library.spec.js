@@ -17,6 +17,13 @@ const open = (page) => page.goto(`/?link=${encodeURIComponent(mock.url)}`);
 const dialog = (page) => page.getByRole("dialog", { name: "ゲーム検索" });
 const game = (page, id) => dialog(page).locator(`[data-button="${id}"]`);
 const names = (page) => dialog(page).locator(".tile .label").allTextContents();
+const chip = (page, name) => dialog(page).getByRole("button", { name, exact: true });
+
+/** The list starts with only the unlabeled games; show every game instead. */
+async function showAll(page) {
+  await chip(page, "ラベル非登録").click();
+  await expect(chip(page, "ラベル非登録")).toHaveAttribute("aria-pressed", "false");
+}
 
 /** Every row is at least as tall as a desktop tab, for a finger. */
 async function expectTabTall(page, rows) {
@@ -43,13 +50,18 @@ test("the library opens at 80% of the screen with the search field focused", asy
   expect(Math.round(box.width)).toBe(1536);
   expect(Math.round(box.height)).toBe(1024);
   await expect(page.getByRole("searchbox", { name: "名前で探す" })).toBeFocused();
+  // It starts with the games that have no label yet: 「ラベル非登録」 is first and on.
+  await expect(dialog(page).locator(".chip").first()).toHaveText("ラベル非登録");
+  await expect(chip(page, "ラベル非登録")).toHaveAttribute("aria-pressed", "true");
+  await expect.poll(() => names(page)).toEqual(["Slay the Spire"]);
+  await showAll(page);
   // 非表示 is hidden until its label is selected.
   await expect
     .poll(() => names(page))
     .toEqual(["Street Fighter™ 6", "Slay the Spire", "Slay the Spire 2"]);
   await expect(game(page, "2868840")).toContainText("未インストール");
-  for (const chip of await dialog(page).locator(".chip").all()) {
-    const size = await chip.boundingBox();
+  for (const one of await dialog(page).locator(".chip").all()) {
+    const size = await one.boundingBox();
     expect(size.height).toBeGreaterThanOrEqual(48);
   }
   await page.screenshot({ path: "test-results/library-open.png" });
@@ -61,7 +73,8 @@ test("the library opens at 80% of the screen with the search field focused", asy
 test("typing and labels narrow the list; 非表示 shows only while selected", async ({ page }) => {
   await open(page);
   await page.locator('[data-button="games"]').click();
-  await page.keyboard.type("spire");
+  await showAll(page);
+  await page.getByRole("searchbox").fill("spire");
   await expect.poll(() => names(page)).toEqual(["Slay the Spire", "Slay the Spire 2"]);
 
   const chip = (name) => dialog(page).getByRole("button", { name, exact: true });
@@ -81,6 +94,7 @@ test("typing and labels narrow the list; 非表示 shows only while selected", a
 test("tapping a game starts it and closes the list", async ({ page }) => {
   await open(page);
   await page.locator('[data-button="games"]').click();
+  await showAll(page);
   await game(page, "1364780").click();
   await expect(dialog(page)).toHaveCount(0);
   expect(mock.link.started).toEqual(["1364780"]);
@@ -129,6 +143,7 @@ test("a game's menu opens its folder, only when it is installed", async ({ page 
   await longPress(page, game(page, "646570"));
   await menuItem(page, "ローカルファイル閲覧").click();
   await expect.poll(() => mock.link.folders).toEqual(["646570"]);
+  await showAll(page);
   await longPress(page, game(page, "2868840"));
   await expect(menuItem(page, "ローカルファイル閲覧")).toBeDisabled();
   await page.keyboard.press("Escape");
@@ -210,6 +225,26 @@ test("while labels cannot be changed, the panel says why", async ({ page }) => {
   const picker = page.getByRole("dialog", { name: "ラベル設定" });
   await expect(picker).toContainText("Steam が起動していないため");
   await expect(picker.getByRole("checkbox", { name: "非表示" })).toBeDisabled();
+});
+
+test("a right click opens the same menus as a long press", async ({ page }) => {
+  await open(page);
+  await page.locator('[data-button="games"]').click();
+  await game(page, "646570").click({ button: "right" });
+  await expect(page.getByRole("menu", { name: "Slay the Spire" })).toBeVisible();
+  await page.getByRole("menuitem", { name: "TOPに固定", exact: true }).click();
+  expect(mock.link.started).toEqual([]);
+  await chip(page, "R15").click({ button: "right" });
+  await expect(page.getByRole("menu", { name: "R15" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  // A right click neither toggles a label nor starts a game.
+  await expect(chip(page, "R15")).toHaveAttribute("aria-pressed", "false");
+  await page.getByRole("button", { name: "閉じる" }).click();
+
+  const pinned = page.locator('[data-button="games/646570"]');
+  await pinned.click({ button: "right" });
+  await expect(page.getByRole("menuitem", { name: "TOPから外す", exact: true })).toBeVisible();
+  expect(mock.link.started).toEqual([]);
 });
 
 test("a library listing only installed games says why", async ({ page }) => {
