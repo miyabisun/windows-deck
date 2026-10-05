@@ -334,6 +334,8 @@ export async function startMockLink() {
         for (const socket of sockets) socket.terminate();
         wss.close();
         server.close(resolve);
+        // The page may still hold keep-alive connections; do not wait for them.
+        server.closeAllConnections();
       }),
   };
 }
