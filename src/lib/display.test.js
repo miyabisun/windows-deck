@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   describeState,
   labelFailure,
+  keysFailure,
   libraryFailure,
   pressFailure,
   switchFailure,
@@ -179,6 +180,16 @@ describe("library buttons", () => {
       note: null,
       failed: false,
     });
+  });
+
+  it("explain why license keys cannot be shown", () => {
+    expect(keysFailure(409, { error: "keys_unavailable", message: "DLsite is down" })).toBe(
+      "DLsite に問い合わせできません: DLsite is down",
+    );
+    expect(keysFailure(404, { error: "not_found" })).toBe(
+      "このゲームのシリアル番号は分かりません（DLsite の作品が分かっていません）",
+    );
+    expect(keysFailure(null, null)).toBe("windows-link に届きませんでした");
   });
 
   it("explain a failed start or pin", () => {

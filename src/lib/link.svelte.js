@@ -1,7 +1,13 @@
 // Connection to windows-link: the button list and states from the `/events` socket,
 // presses over HTTP, and automatic reconnection.
 
-import { labelFailure, libraryFailure, pressFailure, switchFailure } from "./display.js";
+import {
+  keysFailure,
+  labelFailure,
+  libraryFailure,
+  pressFailure,
+  switchFailure,
+} from "./display.js";
 
 /** The `pending` and `failures` key of a library game. */
 export const itemKey = (/** @type {string} */ id, /** @type {string} */ item) => `${id}/${item}`;
@@ -186,6 +192,20 @@ export class Link {
     return status === 0
       ? { programs: body, failure: null }
       : { programs: null, failure: libraryFailure(status, body) };
+  }
+
+  /**
+   * A game's license keys, read from its store each time.
+   * @returns {Promise<{ keys: Array<{ label: string, value: string }> | null, failure: string | null }>}
+   */
+  async licenseKeys(id, item) {
+    const { status, body } = await this.#call(
+      "GET",
+      `/buttons/${encodeURIComponent(id)}/library/${encodeURIComponent(item)}/keys`,
+    );
+    return status === 0
+      ? { keys: body.keys, failure: null }
+      : { keys: null, failure: keysFailure(status, body) };
   }
 
   /** Remember which program starts a game. @returns {Promise<string | null>} why it failed, if it did */

@@ -247,6 +247,14 @@ test("a right click opens the same menus as a long press", async ({ page }) => {
   expect(mock.link.started).toEqual([]);
 });
 
+test("Steam games have no license keys to show", async ({ page }) => {
+  await open(page);
+  await page.locator('[data-button="games"]').click();
+  await longPress(page, game(page, "646570"));
+  await expect(page.getByRole("menuitem", { name: "TOPに固定" })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "シリアル番号" })).toHaveCount(0);
+});
+
 test("dragging a game onto a label puts it there", async ({ page }) => {
   await open(page);
   await page.locator('[data-button="games"]').click();

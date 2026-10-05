@@ -102,6 +102,18 @@ export function libraryFailure(status, body) {
 }
 
 /**
+ * The reason shown when a game's license keys cannot be shown.
+ * @param {number | null} status HTTP status, or null when the request did not get an answer
+ * @param {any} body the JSON error body, if any
+ */
+export function keysFailure(status, body) {
+  if (body?.error === "keys_unavailable") return `DLsite に問い合わせできません: ${body.message}`;
+  if (body?.error === "not_found")
+    return "このゲームのシリアル番号は分かりません（DLsite の作品が分かっていません）";
+  return pressFailure(status, body);
+}
+
+/**
  * The reason shown after a label could not be created, renamed, deleted or filled.
  * @param {number | null} status HTTP status, or null when the request did not get an answer
  * @param {any} body the JSON error body, if any

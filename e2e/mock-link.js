@@ -54,7 +54,7 @@ export const dlsiteButton = (pins = []) => ({
   desktop: null,
   except: [],
   icon: false,
-  state: { kind: "library", pins, pictures: "whole" },
+  state: { kind: "library", pins, pictures: "whole", license_keys: true },
 });
 
 /**
@@ -85,6 +85,7 @@ export function initialDlsite() {
     partial: null,
     labels_locked: null,
     programs: { b2: { candidates: ["app.exe", "startup.exe"], chosen: null } },
+    keys: { a1: [{ label: "ライセンスキー", value: "ABCD-1234-EFGH-5678" }] },
   };
 }
 
@@ -209,11 +210,11 @@ export async function startMockLink() {
       );
     }
     const dl = req.url.match(
-      /^\/buttons\/dlsite\/library(?:\/([^/]+)\/(start|programs|program|image))?$/,
+      /^\/buttons\/dlsite\/library(?:\/([^/]+)\/(start|programs|program|image|keys))?$/,
     );
     if (dl && !link.down) {
       const [, item, action] = dl;
-      const { programs, ...listing } = link.dlsite;
+      const { programs, keys, ...listing } = link.dlsite;
       const json = (status, body) => {
         res.statusCode = status;
         res.setHeader("Content-Type", "application/json");
@@ -230,6 +231,7 @@ export async function startMockLink() {
           '<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256"><circle cx="128" cy="128" r="120" fill="#c0392b"/></svg>',
         );
       }
+      if (action === "keys") return json(200, { keys: keys[item] ?? [] });
       if (action === "programs")
         return programs[item] ? json(200, programs[item]) : json(404, { error: "not_found" });
       if (action === "program") {

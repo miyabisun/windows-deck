@@ -127,6 +127,35 @@ test("a game's menu changes its program only when it has a choice", async ({ pag
   await expect(dialog(page)).toBeVisible();
 });
 
+test("a game's license key is shown with a button that copies it", async ({ page, context }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await open(page);
+  await longPress(page, game(page, "a1"));
+  await page.getByRole("menuitem", { name: "シリアル番号" }).click();
+  const keys = page.getByRole("dialog", { name: "シリアル番号" });
+  await expect(keys).toContainText("湿度の高い夏のマゾ");
+  await expect(keys).toContainText("ライセンスキー");
+  await expect(keys.getByText("ABCD-1234-EFGH-5678")).toBeVisible();
+  await keys.getByRole("button", { name: "ライセンスキーをコピー" }).click();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("ABCD-1234-EFGH-5678");
+  await expect(keys.getByRole("status")).toHaveText("コピーしました");
+  // The copy button is as tall as a row, for a finger.
+  const tab = (await page.getByRole("tab").first().boundingBox()).height;
+  const copy = await keys.getByRole("button", { name: "ライセンスキーをコピー" }).boundingBox();
+  expect(copy.height).toBeGreaterThanOrEqual(tab);
+  await page.screenshot({ path: "test-results/dlsite-keys.png" });
+  await keys.getByRole("button", { name: "閉じる" }).click();
+  await expect(keys).toHaveCount(0);
+  await expect(dialog(page)).toBeVisible();
+
+  // A game without a key says so.
+  await longPress(page, game(page, "b2"));
+  await page.getByRole("menuitem", { name: "シリアル番号" }).click();
+  await expect(page.getByRole("dialog", { name: "シリアル番号" })).toContainText(
+    "このゲームにはシリアル番号がありません",
+  );
+});
+
 test("a game without a program says so on its tile", async ({ page }) => {
   await open(page);
   await game(page, "c3").click();

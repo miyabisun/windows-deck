@@ -1,5 +1,6 @@
 <script>
   import ContextMenu from "./ContextMenu.svelte";
+  import KeysDialog from "./KeysDialog.svelte";
   import LabelPicker from "./LabelPicker.svelte";
   import ProgramChooser from "./ProgramChooser.svelte";
   import { itemKey } from "./link.svelte.js";
@@ -19,6 +20,11 @@
 
   let picking = $state(false);
   let choosing = $state(false);
+  let showingKeys = $state(false);
+  // A library whose games can have license keys (DLsite) says so in its button's state.
+  const keys = $derived(
+    link.buttons.find((/** @type {any} */ b) => b.id === button)?.state?.license_keys === true,
+  );
 
   // The menu closes as soon as a choice is made, so each action reads what it needs
   // from the props before it waits.
@@ -42,6 +48,8 @@
   <LabelPicker {link} {button} {item} {onclose} {onchange} />
 {:else if choosing}
   <ProgramChooser {link} {button} {item} {onclose} />
+{:else if showingKeys}
+  <KeysDialog {link} {button} {item} {onclose} />
 {:else}
   <ContextMenu
     {x}
@@ -54,9 +62,10 @@
       ...(item.choosable
         ? [{ label: "起動ファイルを選ぶ", onselect: () => (choosing = true) }]
         : []),
+      ...(keys ? [{ label: "シリアル番号", onselect: () => (showingKeys = true) }] : []),
     ]}
     onclose={() => {
-      if (!picking && !choosing) onclose();
+      if (!picking && !choosing && !showingKeys) onclose();
     }}
   />
 {/if}
