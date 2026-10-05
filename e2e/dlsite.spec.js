@@ -78,7 +78,10 @@ test("Enter in the search field starts the first game found", async ({ page }) =
   await page.keyboard.type("3djp");
   await expect.poll(() => names(page)).toEqual(["湿度の高い夏のマゾ"]);
   await page.keyboard.press("Enter");
-  await expect(dialog(page)).toHaveCount(0);
+  await expect(dialog(page).getByRole("status").last()).toHaveText(
+    "「湿度の高い夏のマゾ」を起動しました",
+  );
+  await expect(dialog(page)).toBeVisible();
   expect(mock.link.started).toEqual(["a1"]);
 });
 
@@ -93,16 +96,16 @@ test("a game with several programs asks once which one starts it", async ({ page
   expect((await rows.first().boundingBox()).height).toBeGreaterThanOrEqual(tab);
   await page.screenshot({ path: "test-results/dlsite-chooser.png" });
   await chooser.getByRole("radio", { name: "startup.exe" }).click();
-  // The choice starts the game and closes the list.
+  // The choice starts the game; the list stays.
   await expect(chooser).toHaveCount(0);
-  await expect(dialog(page)).toHaveCount(0);
+  await expect(dialog(page).getByRole("status").last()).toHaveText("「催眠アプリ」を起動しました");
+  await expect(dialog(page)).toBeVisible();
   expect(mock.link.started).toEqual(["b2:startup.exe"]);
 
   // Next time it starts at once.
-  await page.locator('[data-button="dlsite"]').click();
   await game(page, "b2").click();
-  await expect(dialog(page)).toHaveCount(0);
-  expect(mock.link.started).toEqual(["b2:startup.exe", "b2:startup.exe"]);
+  await expect.poll(() => mock.link.started).toEqual(["b2:startup.exe", "b2:startup.exe"]);
+  await expect(chooser).toHaveCount(0);
 });
 
 test("a game's menu changes its program only when it has a choice", async ({ page }) => {

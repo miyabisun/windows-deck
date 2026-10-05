@@ -3,7 +3,7 @@
   import Icon from "./Icon.svelte";
   import Spinner from "./Spinner.svelte";
 
-  /** @type {{ link: import("./link.svelte.js").Link, button: string, item: { id: string, name: string }, start?: boolean, onclose: () => void, onstarted?: () => void }} */
+  /** @type {{ link: import("./link.svelte.js").Link, button: string, item: { id: string, name: string }, start?: boolean, onclose: () => void, onstarted?: (item: { id: string, name: string }) => void }} */
   let { link, button, item, start = false, onclose, onstarted = () => {} } = $props();
 
   /** @type {HTMLDialogElement | undefined} */
@@ -26,14 +26,14 @@
   async function choose(program) {
     if (busy) return;
     busy = true;
-    const { id } = item;
+    const { id, name } = item;
     const started = onstarted;
     failure = await link.chooseProgram(button, id, program);
     const result = !failure && start ? await link.startItem(button, id) : null;
     busy = false;
     if (failure) return;
     onclose();
-    if (result === "started") started();
+    if (result === "started") started({ id, name });
   }
 </script>
 

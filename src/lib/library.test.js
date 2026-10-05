@@ -5,6 +5,7 @@ import {
   partialReason,
   pictureUrl,
   pinsOf,
+  toggleLabel,
   visibleItems,
 } from "./library.js";
 
@@ -18,6 +19,17 @@ const items = [
   item("5", "Ｒｅｍｎａｎｔ", ["R15", "outdate"]),
 ];
 const ids = (list) => list.map((i) => i.id);
+
+describe("toggleLabel", () => {
+  it("adds and takes off labels, but ラベル非登録 goes alone", () => {
+    expect(toggleLabel(["fav"], "r15")).toEqual(["fav", "r15"]);
+    expect(toggleLabel(["fav", "r15"], "fav")).toEqual(["r15"]);
+    // Another label takes ラベル非登録 off, and ラベル非登録 takes the others off.
+    expect(toggleLabel([UNLABELED], "fav")).toEqual(["fav"]);
+    expect(toggleLabel(["fav", "r15"], UNLABELED)).toEqual([UNLABELED]);
+    expect(toggleLabel([UNLABELED], UNLABELED)).toEqual([]);
+  });
+});
 
 describe("visibleItems", () => {
   it("lists everything except the hidden labels without a query or label", () => {

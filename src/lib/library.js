@@ -13,6 +13,18 @@ export const DRAG_TYPE = "application/x-windows-deck-game";
 const fold = (/** @type {string} */ text) => text.normalize("NFKC").toLowerCase();
 
 /**
+ * The labels chosen after tapping `label`'s chip: it is taken off when chosen, else added.
+ * ラベル非登録 goes alone: choosing it takes the other labels off, and choosing another
+ * label takes it off (a game without labels has none of them anyway).
+ * @param {string[]} active @param {string} label
+ */
+export function toggleLabel(active, label) {
+  if (active.includes(label)) return active.filter((l) => l !== label);
+  if (label === UNLABELED) return [UNLABELED];
+  return [...active.filter((l) => l !== UNLABELED), label];
+}
+
+/**
  * The games to show, like fzf: every word of `query` is in the name or the detail (the
  * maker), or failing that its letters come there in order (those follow the others);
  * with labels selected, the

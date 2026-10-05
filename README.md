@@ -48,7 +48,8 @@ the screen:
 - The chips below it are your labels (Steam's favorites and hidden, and your own
   collections); tap them to narrow the list (a game in any selected label shows). The
   first chip, **ラベル非登録**, stands for games without any label and is selected when the
-  dialog opens, so the games still to sort come first. Games in
+  dialog opens, so the games still to sort come first; it is never selected with another
+  label (tapping a label takes it off, tapping it takes the others off). Games in
   a label the button hides (`hide` in windows-link, for example `非表示`) show only while
   that chip is selected.
 - **+** at the end of the chips makes a label. Long-press a chip to rename or delete it
@@ -57,7 +58,8 @@ the screen:
 - Drag a game onto a label chip with the mouse to put it in that label (a finger's long
   press keeps opening the menu).
 - Tap a game to start it (or bring it to the front when it runs; a game that is not
-  installed opens Steam's install dialog). The dialog closes.
+  installed opens Steam's install dialog). The dialog stays open where it was, saying
+  the game started, so you can go on sorting from there.
 - Long-press (or right-click) a game for its menu: **TOPに固定** pins it to the tab, where pinned games
   follow the tab's buttons as tiles with the game's picture; **ローカルファイル閲覧** opens
   its install folder; **ラベル設定** lists the labels with a check for each, to put the game

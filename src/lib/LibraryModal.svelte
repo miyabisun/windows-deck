@@ -13,6 +13,7 @@
     labelsLockedReason,
     partialReason,
     pictureUrl,
+    toggleLabel,
     visibleItems,
   } from "./library.js";
   import { itemKey } from "./link.svelte.js";
@@ -144,13 +145,15 @@
 
   /** @param {string} label */
   function toggle(label) {
-    active = active.includes(label) ? active.filter((l) => l !== label) : [...active, label];
+    active = toggleLabel(active, label);
   }
 
   /** @param {any} item */
+  // The list stays open where it was, to pick the next game or its label.
   async function start(item) {
+    const { name } = item;
     const result = await link.startItem(button.id, item.id);
-    if (result === "started") onclose();
+    if (result === "started") tell(`「${name}」を起動しました`);
     else if (result === "choose") choosing = item;
   }
 
@@ -295,7 +298,7 @@
     item={choosing}
     start
     onclose={() => (choosing = null)}
-    onstarted={onclose}
+    onstarted={(started) => tell(`「${started.name}」を起動しました`)}
   />
 {/if}
 

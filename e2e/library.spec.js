@@ -70,6 +70,21 @@ test("the library opens at 80% of the screen with the search field focused", asy
   await expect(dialog(page)).toHaveCount(0);
 });
 
+test("ラベル非登録 and the other labels are not selected together", async ({ page }) => {
+  await open(page);
+  await page.locator('[data-button="games"]').click();
+  const chip = (name) => dialog(page).getByRole("button", { name, exact: true });
+  await expect(chip("ラベル非登録")).toHaveAttribute("aria-pressed", "true");
+  await chip("R15").click();
+  await expect(chip("R15")).toHaveAttribute("aria-pressed", "true");
+  await expect(chip("ラベル非登録")).toHaveAttribute("aria-pressed", "false");
+  await expect.poll(() => names(page)).toEqual(["Slay the Spire 2"]);
+  await chip("ラベル非登録").click();
+  await expect(chip("ラベル非登録")).toHaveAttribute("aria-pressed", "true");
+  await expect(chip("R15")).toHaveAttribute("aria-pressed", "false");
+  await expect.poll(() => names(page)).toEqual(["Slay the Spire"]);
+});
+
 test("typing and labels narrow the list; 非表示 shows only while selected", async ({ page }) => {
   await open(page);
   await page.locator('[data-button="games"]').click();
@@ -91,13 +106,28 @@ test("typing and labels narrow the list; 非表示 shows only while selected", a
   await expect(dialog(page)).toContainText("見つかりません");
 });
 
-test("tapping a game starts it and closes the list", async ({ page }) => {
+test("tapping a game starts it and leaves the list as it was", async ({ page }) => {
+  await page.setViewportSize({ width: 1920, height: 1280 });
+  mock.link.library.items = Array.from({ length: 60 }, (_, i) => ({
+    id: String(1000 + i),
+    name: `Game ${i}`,
+    installed: true,
+    labels: [],
+  }));
   await open(page);
   await page.locator('[data-button="games"]').click();
-  await showAll(page);
-  await game(page, "1364780").click();
+  await game(page, "1050").scrollIntoViewIfNeeded();
+  const scroll = dialog(page).locator(".scroll");
+  const before = await scroll.evaluate((el) => el.scrollTop);
+  expect(before).toBeGreaterThan(0);
+  await game(page, "1050").click();
+  await expect(dialog(page).getByRole("status").last()).toHaveText("「Game 50」を起動しました");
+  expect(mock.link.started).toEqual(["1050"]);
+  // Still open where it was, to pick the next game or its label.
+  await expect(dialog(page)).toBeVisible();
+  expect(await scroll.evaluate((el) => el.scrollTop)).toBe(before);
+  await page.keyboard.press("Escape");
   await expect(dialog(page)).toHaveCount(0);
-  expect(mock.link.started).toEqual(["1364780"]);
 
   // Tapping outside the list closes it too.
   await page.locator('[data-button="games"]').click();
