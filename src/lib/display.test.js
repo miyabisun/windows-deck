@@ -185,6 +185,9 @@ describe("library buttons", () => {
     expect(libraryFailure(404, { error: "not_found" })).toBe(
       "ライブラリにこのゲームがありません（一覧を開き直してください）",
     );
+    expect(libraryFailure(409, { error: "not_downloaded", message: "ダウンロード中 40%" })).toBe(
+      "まだこの PC にありません（ダウンロード中 40%）",
+    );
     expect(libraryFailure(500, { error: "launch", message: "denied" })).toBe(
       "起動できませんでした: denied",
     );

@@ -240,6 +240,8 @@ export async function startMockLink() {
       }
       if (item === "c3")
         return json(409, { error: "no_program", message: "it has no program to start" });
+      const coming = listing.items.find((i) => i.id === item && !i.installed);
+      if (coming) return json(409, { error: "not_downloaded", message: coming.status });
       if (programs[item] && !programs[item].chosen)
         return json(409, { error: "choose_program", message: "choose which program starts it" });
       link.started.push(programs[item] ? `${item}:${programs[item].chosen}` : item);

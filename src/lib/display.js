@@ -97,6 +97,7 @@ export function libraryFailure(status, body) {
     return "起動できるファイルが見つかりません（ローカルファイル閲覧で中を確かめてください）";
   if (body?.error === "not_found")
     return "ライブラリにこのゲームがありません（一覧を開き直してください）";
+  if (body?.error === "not_downloaded") return `まだこの PC にありません（${body.message}）`;
   return pressFailure(status, body);
 }
 

@@ -159,7 +159,9 @@
     const notes = [];
     if (item.detail) notes.push(item.detail);
     if (pinned.has(item.id)) notes.push("TOP に固定中");
-    if (!item.installed) notes.push("未インストール（押すとインストール）");
+    // How a download or update windows-link runs is going (DLsite).
+    if (item.status) notes.push(item.status);
+    else if (!item.installed) notes.push("未インストール（押すとインストール）");
     return notes.join("・") || null;
   }
 </script>

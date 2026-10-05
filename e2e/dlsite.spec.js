@@ -52,6 +52,27 @@ test("games show their icon whole and their maker, and the maker can be searched
   await expect.poll(() => names(page)).toEqual(["催眠アプリ"]);
 });
 
+test("a game bought but not downloaded yet says how its download is going", async ({ page }) => {
+  mock.link.dlsite.items.unshift({
+    id: "RJ7",
+    name: "まだ来ないゲーム",
+    detail: "Brand",
+    choosable: false,
+    image: null,
+    installed: false,
+    labels: [],
+    status: "ダウンロード中 40%",
+  });
+  await open(page);
+  const coming = game(page, "RJ7");
+  await expect(coming).toContainText("Brand・ダウンロード中 40%");
+  await expect(coming).not.toContainText("未インストール");
+  await coming.click();
+  await expect(coming).toContainText("まだこの PC にありません（ダウンロード中 40%）");
+  await expect(dialog(page)).toBeVisible();
+  expect(mock.link.started).toEqual([]);
+});
+
 test("Enter in the search field starts the first game found", async ({ page }) => {
   await open(page);
   await page.keyboard.type("3djp");
