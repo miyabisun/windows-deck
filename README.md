@@ -188,15 +188,17 @@ workflow uses only the token GitHub provides.
 ## Development
 
 ```powershell
-npm run format:check
-npm run lint
-npm run check          # svelte-check
-npm test               # unit tests (Vitest)
-npx playwright install chromium
-npm run test:e2e       # Chromium against a stand-in windows-link
-npm run build
-cd src-tauri; cargo fmt --check; cargo clippy --all-targets -- -D warnings; cargo test
+npx playwright install chromium   # once, for the end-to-end tests
+git config core.hooksPath .githooks  # once per clone: the gate below
+npm run verify
 ```
+
+`npm run verify` runs every check: formatting (Prettier, rustfmt), ESLint, svelte-check,
+the unit tests (Vitest), the end-to-end tests, and Clippy and the Rust tests in
+`src-tauri`. There is no CI that tests: the `pre-push` hook in `.githooks` runs it before
+`main` or a release tag is pushed, and refuses the push when anything fails (or when the
+commit being pushed is not the clean working tree). Other branches are pushed without it.
+GitHub Actions only builds releases.
 
 The end-to-end tests serve the built page and replace windows-link with
 `e2e/mock-link.js`, so they need no Windows audio devices. In a browser (without Tauri)
