@@ -7,6 +7,7 @@
   import ProgramChooser from "./lib/ProgramChooser.svelte";
   import Spinner from "./lib/Spinner.svelte";
   import Tile from "./lib/Tile.svelte";
+  import { stateIcon } from "./lib/display.js";
   import { pictureUrl, pinsOf } from "./lib/library.js";
   import { Link, itemKey } from "./lib/link.svelte.js";
   import { buttonsFor } from "./lib/tabs.js";
@@ -118,6 +119,7 @@
         <Tile
           {button}
           icon={button.icon ? `${link.base}/buttons/${encodeURIComponent(button.id)}/icon` : null}
+          glyph={stateIcon(button.state)}
           pending={!!link.pending[button.id]}
           failure={link.failures[button.id]}
           disabled={link.status !== "connected"}

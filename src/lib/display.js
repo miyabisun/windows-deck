@@ -57,6 +57,25 @@ export function describeState(state) {
   }
 }
 
+/**
+ * The icon of a button's state, if it has one: the current output device (when the
+ * button says what each is), sound or muted, and a speaker for the mixer.
+ * @param {any} state the button's state from windows-link
+ * @returns {keyof typeof import("./Icon.svelte").ICONS | null} the icon's name
+ */
+export function stateIcon(state) {
+  switch (state?.kind) {
+    case "output":
+      return state.options?.find((/** @type {any} */ o) => o.alias === state.current)?.icon ?? null;
+    case "mute":
+      return state.muted ? "muted" : "sound";
+    case "mixer":
+      return "volume";
+    default:
+      return null;
+  }
+}
+
 /** Why a voice button cannot reach Discord, in words the user can act on. */
 function voiceReason(reason) {
   if (!reason) return null;

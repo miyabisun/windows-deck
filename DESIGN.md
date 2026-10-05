@@ -211,6 +211,10 @@ Sumi family の共通原本（rust-svelte-template の DESIGN.md、2026-10-04 �
 処理中は右上に 18px のスピナーを出し、
 `aria-busy="true"` にする。失敗中は border を danger にし、原因の文を出す。
 `touch-action: manipulation` と `user-select: none` を付ける。
+ラベルの左に 56px のアイコンを置く。windows-link が絵を持つボタン（exe・ショートカットのアイコン、DLsite の favicon）は
+その絵、持たないボタンは状態のアイコン（線画、36px）。出力切替は今のデバイス（スピーカー／ヘッドフォン。
+設定で種類を指定したときだけ）、ミュートは音あり（音の波）とミュート中（×、danger の色）、ミキサーはスピーカー。
+どちらも無いボタンはアイコンを置かない。
 
 ### ゲームのタイル
 

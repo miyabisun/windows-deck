@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  stateIcon,
   describeState,
   labelFailure,
   keysFailure,
@@ -31,6 +32,29 @@ describe("describeState of the mute button and the mixer", () => {
       note: "ミュート中",
       failed: false,
     });
+  });
+});
+
+describe("stateIcon", () => {
+  it("shows the current device, whether the output is muted, and a speaker for the mixer", () => {
+    const output = (current, icons) => ({
+      kind: "output",
+      current,
+      options: [
+        { alias: "d3v", icon: icons?.[0] ?? null },
+        { alias: "jbl", icon: icons?.[1] ?? null },
+      ],
+    });
+    expect(stateIcon(output("d3v", ["speaker", "headphones"]))).toBe("speaker");
+    expect(stateIcon(output("jbl", ["speaker", "headphones"]))).toBe("headphones");
+    // Without icons in the configuration, or with another device as the default.
+    expect(stateIcon(output("jbl"))).toBe(null);
+    expect(stateIcon(output(null, ["speaker", "headphones"]))).toBe(null);
+    expect(stateIcon({ kind: "mute", muted: false, volume: 1 })).toBe("sound");
+    expect(stateIcon({ kind: "mute", muted: true, volume: 1 })).toBe("muted");
+    expect(stateIcon({ kind: "mixer", muted: false, volume: 1 })).toBe("volume");
+    expect(stateIcon({ kind: "game", running: false })).toBe(null);
+    expect(stateIcon(undefined)).toBe(null);
   });
 });
 

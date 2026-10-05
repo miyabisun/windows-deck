@@ -22,7 +22,10 @@ test("the mute button mutes and unmutes the output", async ({ page }) => {
   await expect(tile(page, "mute")).toContainText("ミュート");
   await expect(tile(page, "mute")).toContainText("音量 45%");
   await expect(tile(page, "mixer")).toContainText("音量 45%");
+  await expect(tile(page, "mute").locator("[data-icon]")).toHaveAttribute("data-icon", "sound");
+  await expect(tile(page, "mixer").locator("[data-icon]")).toHaveAttribute("data-icon", "volume");
   await tile(page, "mute").click();
+  await expect(tile(page, "mute").locator("[data-icon]")).toHaveAttribute("data-icon", "muted");
   await expect(tile(page, "mute")).toContainText("ミュート解除");
   await expect(tile(page, "mute")).toContainText("ミュート中");
   await expect(tile(page, "mixer")).toContainText("ミュート中");

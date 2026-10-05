@@ -1,13 +1,15 @@
 <script>
+  import Icon from "./Icon.svelte";
   import Spinner from "./Spinner.svelte";
   import { describeState } from "./display.js";
   import { DRAG_TYPE } from "./library.js";
   import { longpress } from "./longpress.js";
 
-  /** @type {{ button: { id: string, label: string, state?: any }, icon?: string | null, cover?: string | null, whole?: boolean, note?: string | null, pending?: boolean, failure?: string, disabled?: boolean, onpress: () => void, onlong?: ((point: { x: number, y: number }) => void) | null, drag?: string | null }} */
+  /** @type {{ button: { id: string, label: string, state?: any }, icon?: string | null, glyph?: keyof typeof import("./Icon.svelte").ICONS | null, cover?: string | null, whole?: boolean, note?: string | null, pending?: boolean, failure?: string, disabled?: boolean, onpress: () => void, onlong?: ((point: { x: number, y: number }) => void) | null, drag?: string | null }} */
   let {
     button,
     icon = null,
+    glyph = null,
     cover = undefined,
     whole = false,
     note: extra = null,
@@ -81,6 +83,10 @@
     <span class="head">
       {#if icon}
         <img class="picture" src={icon} alt="" draggable="false" />
+      {:else if glyph}
+        <span class="glyph" class:muted={glyph === "muted"} data-icon={glyph}>
+          <Icon name={glyph} />
+        </span>
       {/if}
       <span class="label">{button.label}</span>
     </span>
@@ -161,6 +167,19 @@
     align-items: center
     gap: var(--sp-3)
     min-width: 0
+
+  // An icon of the button's state, in the picture's place.
+  .glyph
+    display: inline-flex
+    align-items: center
+    justify-content: center
+    flex: none
+    width: 56px
+    height: 56px
+    font-size: 36px
+
+    &.muted
+      color: var(--c-danger)
 
   .picture
     width: 56px

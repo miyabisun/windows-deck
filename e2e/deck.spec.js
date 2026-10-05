@@ -21,6 +21,10 @@ test("shows the buttons in order with their current state", async ({ page }) => 
   await expect(tiles).toHaveCount(2);
   await expect(tiles.nth(0)).toContainText("出力切替");
   await expect(tiles.nth(0)).toContainText("MOTU (MOTU M Series)");
+  await expect(tiles.nth(0).locator("[data-icon]")).toHaveAttribute("data-icon", "speaker");
+  await expect(tiles.nth(0).locator("[data-icon] svg")).toBeVisible();
+  // A button without an icon of its state shows none.
+  await expect(tiles.nth(1).locator("[data-icon]")).toHaveCount(0);
   await expect(tiles.nth(1)).toContainText("スト6 音量");
   await expect(tiles.nth(1)).toContainText("100%");
 });
@@ -36,6 +40,8 @@ test("a press shows progress, then the new state", async ({ page }) => {
   await output.click({ force: true });
   await expect(output).toContainText("BTイヤホン (JBL Tour Pro 3)");
   await expect(output).toHaveAttribute("aria-busy", "false");
+  // The icon follows the device: headphones now, a speaker before.
+  await expect(output.locator("[data-icon]")).toHaveAttribute("data-icon", "headphones");
   expect(mock.link.presses).toEqual(["output"]);
 
   await tile(page, "sf6-volume").click();

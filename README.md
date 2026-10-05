@@ -34,13 +34,15 @@ At the right end of the tab row:
   renamed or removed in Windows); picking one creates that desktop and switches to it.
 - **Moon** puts the PC to sleep right away.
 
-Buttons with an icon in windows-link (an exe's or a shortcut's Windows icon) show it next
-to their label.
+Buttons with an icon in windows-link (an exe's or a shortcut's Windows icon, or a picture on
+the web such as DLsite's favicon) show it next to their label. Other buttons show an icon of
+their state: the current output device when windows-link says which is a speaker and
+which headphones (`device_icons`), whether sound is muted, and a speaker for the mixer.
 
 ## Mute and mixer
 
 - A **mute** button (`audio.mute_toggle`) mutes the Windows output, or unmutes it, and shows
-  which.
+  which with its icon (a speaker with sound, or crossed out in red).
 - A **mixer** button (`audio.mixer`) shows the volume and opens the mixer: the whole volume
   on top, then each application that has sound; tap where a slider should be, or slide it.
   Moving the whole volume unmutes it.

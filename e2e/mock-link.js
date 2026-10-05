@@ -12,8 +12,8 @@ const output = (current) => ({
     current,
     current_name: current === "motu" ? "MOTU (MOTU M Series)" : "BTイヤホン (JBL Tour Pro 3)",
     options: [
-      { alias: "motu", name: "MOTU (MOTU M Series)", connected: true },
-      { alias: "jbl", name: "BTイヤホン (JBL Tour Pro 3)", connected: true },
+      { alias: "motu", name: "MOTU (MOTU M Series)", connected: true, icon: "speaker" },
+      { alias: "jbl", name: "BTイヤホン (JBL Tour Pro 3)", connected: true, icon: "headphones" },
     ],
   },
 });
