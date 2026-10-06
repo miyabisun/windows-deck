@@ -5,10 +5,16 @@ pub mod config;
 pub mod logging;
 pub mod update;
 
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+    time::Duration,
+};
 
 use tauri::{Manager, WebviewWindow};
-use tracing::info;
+use tracing::{info, warn};
 use update::{Updater, swap};
 
 /// Run with this argument while the panel is running to make it check for an update now.
@@ -53,39 +59,58 @@ fn deck_config() -> config::Loaded {
 }
 
 /// Index of the monitor whose display name (`\\.\DISPLAYn`) is `wanted`.
-fn pick(names: &[Option<String>], wanted: Option<&str>) -> Option<usize> {
-    let wanted = wanted?;
+fn pick(names: &[Option<String>], wanted: &str) -> Option<usize> {
     names.iter().position(|name| {
         name.as_deref()
             .is_some_and(|n| n.eq_ignore_ascii_case(wanted))
     })
 }
 
-/// Fill `monitor` (a display name), or the primary monitor when it is `None` or not
-/// connected, and show the window. Returns the display name used.
+/// Whether the window has been placed, so starting the panel again may bring it forward.
+/// Until then it stays hidden rather than appearing on whatever monitor it was made on.
+#[derive(Default)]
+struct Placed(AtomicBool);
+
+/// Fill `monitor` (a display name) and show the window. Without a monitor, show an
+/// ordinary window on the primary monitor, where the panel asks for one. A monitor that
+/// is not connected is an error, and the window stays hidden.
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)] // Tauri hands command arguments over by value.
-fn place_window(window: WebviewWindow, monitor: Option<String>) -> Result<String, String> {
+fn place_window(window: WebviewWindow, monitor: Option<String>) -> Result<(), String> {
     let fail = |err: tauri::Error| err.to_string();
-    let monitors = window.available_monitors().map_err(fail)?;
-    let names: Vec<Option<String>> = monitors.iter().map(|m| m.name().cloned()).collect();
-    let target = match pick(&names, monitor.as_deref()) {
-        Some(index) => Some(monitors[index].clone()),
-        None => window.primary_monitor().map_err(fail)?,
-    };
-    if let Some(target) = &target {
+    if let Some(wanted) = &monitor {
+        let monitors = window.available_monitors().map_err(fail)?;
+        let names: Vec<Option<String>> = monitors.iter().map(|m| m.name().cloned()).collect();
+        let Some(index) = pick(&names, wanted) else {
+            return Err(format!("{wanted} is not connected"));
+        };
         // Fullscreen fills the monitor the window is on, so move there first.
         window.set_fullscreen(false).map_err(fail)?;
-        window.set_position(*target.position()).map_err(fail)?;
+        window
+            .set_position(*monitors[index].position())
+            .map_err(fail)?;
         window.set_fullscreen(true).map_err(fail)?;
+        info!(monitor = %wanted, "filling the monitor");
+    } else {
+        window.set_fullscreen(false).map_err(fail)?;
+        window.center().map_err(fail)?;
+        warn!("no monitor is configured; showing a window that asks for one");
     }
     window.show().map_err(fail)?;
     window.set_focus().map_err(fail)?;
+    window.state::<Placed>().0.store(true, Ordering::Relaxed);
     // The window of a freshly updated panel is up: the previous exe is no longer needed.
     if let Some(exe) = window.state::<Arc<Updater>>().installed_exe() {
         swap::remove_old_later(exe);
     }
-    Ok(target.and_then(|m| m.name().cloned()).unwrap_or_default())
+    Ok(())
+}
+
+/// Why the panel is not showing yet, for the log.
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)] // Tauri hands command arguments over by value.
+fn wait_note(reason: String) {
+    info!(%reason, "waiting to show the panel");
 }
 
 /// This window's handle, which windows-link pins to every virtual desktop.
@@ -109,12 +134,15 @@ pub fn run(context: tauri::Context) {
             if argv.iter().any(|arg| arg == CHECK_UPDATE) {
                 let updater = app.state::<Arc<Updater>>().inner().clone();
                 std::thread::spawn(move || updater.check_and_apply());
+            } else if !app.state::<Placed>().0.load(Ordering::Relaxed) {
+                info!("started again before the panel was placed");
             } else if let Some(window) = app.get_webview_window("main") {
                 let _ = window.show();
                 let _ = window.set_focus();
             }
         }))
         .manage(updater.clone())
+        .manage(Placed::default())
         .setup(move |_| {
             update::run_periodically(updater);
             Ok(())
@@ -122,6 +150,7 @@ pub fn run(context: tauri::Context) {
         .invoke_handler(tauri::generate_handler![
             deck_config,
             place_window,
+            wait_note,
             window_handle
         ])
         .run(context)
@@ -139,9 +168,8 @@ mod tests {
             None,
             Some(r"\\.\DISPLAY2".to_owned()),
         ];
-        assert_eq!(pick(&names, Some(r"\\.\display2")), Some(2));
-        assert_eq!(pick(&names, Some(r"\\.\DISPLAY9")), None);
-        assert_eq!(pick(&names, None), None);
+        assert_eq!(pick(&names, r"\\.\display2"), Some(2));
+        assert_eq!(pick(&names, r"\\.\DISPLAY9"), None);
     }
 
     #[test]

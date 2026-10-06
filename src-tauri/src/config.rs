@@ -30,6 +30,8 @@ pub struct Loaded {
     pub link: String,
     pub monitor: Option<String>,
     pub error: Option<String>,
+    /// The file read, for the panel to name when it asks for a monitor.
+    pub path: String,
 }
 
 impl Loaded {
@@ -38,6 +40,7 @@ impl Loaded {
             link: DEFAULT_LINK.into(),
             monitor: None,
             error,
+            path: String::new(),
         }
     }
 }
@@ -51,11 +54,15 @@ pub fn default_path() -> PathBuf {
 }
 
 pub fn load(path: &Path) -> Loaded {
-    match std::fs::read_to_string(path) {
+    let loaded = match std::fs::read_to_string(path) {
         Ok(text) => parse(&text)
             .unwrap_or_else(|err| Loaded::defaults(Some(format!("{}: {err}", path.display())))),
         Err(err) if err.kind() == ErrorKind::NotFound => Loaded::defaults(None),
         Err(err) => Loaded::defaults(Some(format!("{}: {err}", path.display()))),
+    };
+    Loaded {
+        path: path.display().to_string(),
+        ..loaded
     }
 }
 
@@ -77,6 +84,7 @@ fn parse(text: &str) -> Result<Loaded, String> {
         link,
         monitor,
         error: None,
+        path: String::new(),
     })
 }
 
@@ -102,6 +110,8 @@ mod tests {
         assert_eq!(blank_monitor.monitor, None);
         let missing = load(Path::new("Z:/no/such/windows-deck/config.yaml"));
         assert_eq!((missing.link.as_str(), missing.error), (DEFAULT_LINK, None));
+        // The panel names the file to write when it asks for a monitor.
+        assert_eq!(missing.path, "Z:/no/such/windows-deck/config.yaml");
     }
 
     #[test]

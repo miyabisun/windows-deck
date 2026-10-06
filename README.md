@@ -138,16 +138,18 @@ An optional YAML file at `%LOCALAPPDATA%\windows-deck\config.yaml`
 
 ```yaml
 link: http://127.0.0.1:4730 # windows-link URL (default)
-monitor: JAPANNEXT MNT # monitor to fill (optional)
+monitor: mon-e2fd9cff7a99f8d8 # monitor to fill
 ```
 
 `monitor` is matched against windows-link's `GET /touch-monitors` by `id`, `name` or
-display name (`\\.\DISPLAY2`), ignoring case. Without it the panel fills the touch
-monitor, if windows-link reports exactly one. If the monitor is not connected, there is
-no single touch monitor, or windows-link does not answer at startup, the panel fills the
-primary monitor; in the last case it moves to the right monitor once windows-link
-answers. A file that cannot be read is reported on the panel, which then uses the
-defaults. Restart the panel after editing the file.
+display name (`\\.\DISPLAY2`), ignoring case; the `id` stays the same when display
+numbers change. The panel fills only that monitor. Until windows-link answers and
+reports the monitor as connected, the panel stays hidden and checks again every few
+seconds; it never falls back to another monitor.
+
+Without `monitor` (or when the file cannot be read) the panel opens as an ordinary
+window on the primary monitor that lists windows-link's monitors and asks for one.
+Write the setting and press **再読み込み**, or restart the panel after editing the file.
 
 ## Start at logon
 

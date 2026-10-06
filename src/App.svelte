@@ -20,8 +20,8 @@
   let shown = $state(false);
   /** @type {number | null} */
   let hwnd = null;
-  let monitor = null;
-  let placed = false;
+  /** @type {{ path: string, candidates: import("./lib/placement.js").Monitor[] } | null} no monitor is configured */
+  let setup = $state(null);
 
   const visible = $derived(link ? buttonsFor(link.buttons, link.desktops) : []);
   const pins = $derived(pinsOf(visible));
@@ -47,26 +47,18 @@
     let started = null;
     loadConfig().then(async (config) => {
       configError = config.error;
-      monitor = config.monitor;
       started = new Link(config.link);
       link = started;
       started.start();
       hwnd = await windowHandle();
-      placed = await placeWindow(config.link, monitor);
+      const placed = await placeWindow(config.link, config.monitor);
+      if (placed?.kind === "setup") setup = { path: config.path, candidates: placed.candidates };
       shown = true;
     });
     return () => {
       document.removeEventListener("contextmenu", noMenu);
       started?.stop();
     };
-  });
-
-  // Started before windows-link answered: move to the right monitor once it does.
-  $effect(() => {
-    if (link?.status === "connected" && !placed) {
-      placed = true;
-      placeWindow(link.base, monitor);
-    }
   });
 
   // Stay on every virtual desktop; see Link.pinRound for when to pin again.
@@ -93,6 +85,27 @@
     <p class="banner" role="alert">
       設定ファイルを読めないため、既定の設定で動いています: {configError}
     </p>
+  {/if}
+  {#if setup}
+    <div class="banner setup" role="alert">
+      <p>
+        表示するモニターが設定されていません。{setup.path || "設定ファイル"} に
+        <code>monitor: モニターのID</code> を書いて、再読み込みしてください。
+      </p>
+      {#if setup.candidates.length > 0}
+        <ul>
+          {#each setup.candidates as candidate (candidate.id)}
+            <li>
+              <code>{candidate.id}</code>
+              {candidate.name.trim()}{candidate.primary ? "（メイン）" : ""}{candidate.touch
+                ? "（タッチ）"
+                : ""}
+            </li>
+          {/each}
+        </ul>
+      {/if}
+      <button type="button" class="reload" onclick={() => location.reload()}>再読み込み</button>
+    </div>
   {/if}
   {#if link?.status === "disconnected"}
     <p class="banner" role="status">
@@ -197,6 +210,30 @@
     color: var(--c-danger)
     font-size: var(--fs-sm)
     line-height: 1.5
+
+  // No monitor is configured: the monitors to choose from and a way to read the file again.
+  .setup
+    display: flex
+    flex-direction: column
+    align-items: flex-start
+    gap: var(--sp-2)
+
+    p, ul
+      margin: 0
+
+    ul
+      padding-left: var(--sp-5)
+
+  .reload
+    min-height: 56px
+    padding: 0 var(--sp-5)
+    border: 1px solid currentColor
+    border-radius: var(--radius-md)
+    background: transparent
+    color: inherit
+    font: inherit
+    cursor: pointer
+    touch-action: manipulation
 
   .quiet
     color: var(--c-muted)

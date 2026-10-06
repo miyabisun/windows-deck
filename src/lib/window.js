@@ -2,16 +2,22 @@
 // browser during development and tests) the configuration comes from the page URL.
 
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import { chooseMonitor } from "./placement.js";
+import { placement } from "./placement.js";
 
 const DEFAULT_LINK = "http://127.0.0.1:4730";
 const MONITOR_LOOKUP_MS = 2000;
+const PLACE_RETRY_MS = 5000;
 
-/** @returns {Promise<{ link: string, monitor: string | null, error: string | null }>} */
+/** @returns {Promise<{ link: string, monitor: string | null, error: string | null, path: string }>} */
 export async function loadConfig() {
   if (isTauri()) return invoke("deck_config");
   const params = new URLSearchParams(location.search);
-  return { link: params.get("link") ?? DEFAULT_LINK, monitor: params.get("monitor"), error: null };
+  return {
+    link: params.get("link") ?? DEFAULT_LINK,
+    monitor: params.get("monitor"),
+    error: null,
+    path: "",
+  };
 }
 
 /**
@@ -25,26 +31,41 @@ export async function windowHandle() {
   return hwnd ? Number(hwnd) : null;
 }
 
-/**
- * Fill the configured monitor (or the touch monitor windows-link reports) and show the
- * window. Without an answer from windows-link the window goes to the primary monitor.
- * @returns {Promise<boolean>} whether windows-link answered, so the choice is final
- */
-export async function placeWindow(link, preference) {
-  if (!isTauri()) return true;
-  let target = null;
-  let answered = false;
+/** @returns {Promise<import("./placement.js").Monitor[] | null>} null without an answer */
+async function touchMonitors(link) {
   try {
     const response = await fetch(`${link}/touch-monitors`, {
       signal: AbortSignal.timeout(MONITOR_LOOKUP_MS),
     });
-    if (response.ok) {
-      target = chooseMonitor(await response.json(), preference);
-      answered = true;
-    }
+    return response.ok ? await response.json() : null;
   } catch {
-    // windows-link is not reachable yet; use the primary monitor for now.
+    return null;
   }
-  await invoke("place_window", { monitor: target });
-  return answered;
+}
+
+/**
+ * Fill the configured monitor and show the window, waiting (hidden) until windows-link
+ * reports that monitor and it is connected. Without a configured monitor, show an
+ * ordinary window that asks for one. Outside Tauri there is no window to place.
+ * @returns {Promise<import("./placement.js").Placement | null>}
+ */
+export async function placeWindow(link, preference) {
+  if (!isTauri()) return null;
+  let waitingFor = null;
+  for (;;) {
+    let choice = placement(await touchMonitors(link), preference);
+    if (choice.kind !== "wait") {
+      try {
+        await invoke("place_window", { monitor: choice.kind === "fill" ? choice.display : null });
+        return choice;
+      } catch (err) {
+        choice = { kind: "wait", reason: String(err) };
+      }
+    }
+    if (choice.reason !== waitingFor) {
+      waitingFor = choice.reason;
+      await invoke("wait_note", { reason: waitingFor });
+    }
+    await new Promise((resolve) => setTimeout(resolve, PLACE_RETRY_MS));
+  }
 }
