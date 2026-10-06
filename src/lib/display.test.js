@@ -165,42 +165,6 @@ describe("switchFailure", () => {
   });
 });
 
-describe("voice buttons", () => {
-  it("say what a press does: join the voice chat, or leave it while in it", () => {
-    expect(describeState({ kind: "voice", available: true, joined: true, reason: null })).toEqual({
-      text: "ボイチャから退室",
-      note: "参加中",
-      failed: false,
-    });
-    expect(
-      describeState({ kind: "voice", available: true, joined: false, reason: null }).text,
-    ).toBe("ボイチャに入室");
-  });
-
-  it("explain an unreachable Discord in a way the user can act on", () => {
-    const off = (reason) =>
-      describeState({ kind: "voice", available: false, joined: false, reason });
-    expect(off("Discord is not running")).toEqual({
-      text: "Discord 未接続",
-      note: "Discord が起動していません（押すと起動して参加します）",
-      failed: false,
-    });
-    expect(off("windows-link needs approval in Discord: press a Discord button").note).toBe(
-      "押すと Discord に許可の確認が出ます",
-    );
-    expect(off("secrets.yaml has no discord section").note).toBe(
-      "secrets.yaml has no discord section",
-    );
-  });
-
-  it("explain failed presses", () => {
-    expect(
-      pressFailure(409, { error: "discord_unavailable", message: "Discord did not start in time" }),
-    ).toBe("Discord につながりません: Discord did not start in time");
-    expect(pressFailure(409, { error: "discord_rejected" })).toBe("Discord で許可されませんでした");
-  });
-});
-
 describe("launch and game buttons", () => {
   it("say what a press will do", () => {
     expect(describeState({ kind: "launch", running: false })).toEqual({

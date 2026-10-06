@@ -172,28 +172,3 @@ test.describe("on a touch screen", () => {
     ).toBe("rgb(44, 44, 44)");
   });
 });
-
-test("a Discord voice button shows and toggles whether you are in its channel", async ({
-  page,
-}) => {
-  const voice = (state) => ({
-    id: "vc-uf4",
-    type: "discord.voice",
-    label: "UF4フレンド",
-    desktop: null,
-    state: { kind: "voice", reason: null, ...state },
-  });
-  mock.link.buttons = [voice({ available: true, joined: false })];
-  await open(page);
-  const tile = page.locator('[data-button="vc-uf4"]');
-  await expect(tile).toContainText("ボイチャに入室");
-  await tile.click();
-  await expect(tile).toContainText("ボイチャから退室");
-  await expect(tile).toContainText("参加中");
-
-  mock.change(voice({ available: false, joined: false, reason: "Discord is not running" }));
-  await expect(tile).toContainText("Discord 未接続");
-  await expect(tile).toContainText("押すと起動して参加します");
-  await expect(tile).toHaveAttribute("aria-disabled", "false");
-  await page.screenshot({ path: "test-results/deck-voice.png" });
-});

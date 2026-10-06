@@ -24,12 +24,6 @@ export function describeState(state) {
         note: null,
         failed: false,
       };
-    case "voice":
-      if (state.available)
-        return state.joined
-          ? { text: "ボイチャから退室", note: "参加中", failed: false }
-          : { text: "ボイチャに入室", note: null, failed: false };
-      return { text: "Discord 未接続", note: voiceReason(state.reason), failed: false };
     case "launch":
       return state.running
         ? { text: "前に出す", note: "起動中", failed: false }
@@ -76,17 +70,6 @@ export function stateIcon(state) {
   }
 }
 
-/** Why a voice button cannot reach Discord, in words the user can act on. */
-function voiceReason(reason) {
-  if (!reason) return null;
-  if (reason.startsWith("Discord is not running")) {
-    return "Discord が起動していません（押すと起動して参加します）";
-  }
-  if (reason.startsWith("windows-link needs approval"))
-    return "押すと Discord に許可の確認が出ます";
-  return reason;
-}
-
 /**
  * The reason shown on a button after a failed press.
  * @param {number | null} status HTTP status, or null when the request did not get an answer
@@ -101,16 +84,10 @@ export function pressFailure(status, body) {
       return "対象のアプリが起動していません";
     case "not_found":
       return "windows-link にこのボタンがありません（設定が変わった可能性があります）";
-    case "discord_unavailable":
-      return `Discord につながりません: ${body.message}`;
-    case "discord_rejected":
-      return "Discord で許可されませんでした";
     case "no_window":
       return "ゲームのウィンドウがまだ無いため閉じられません";
     case "launch":
       return `起動できませんでした: ${body.message}`;
-    case "discord":
-      return `Discord の操作に失敗しました: ${body.message}`;
   }
   if (body?.message) return `Windows の操作に失敗しました: ${body.message}`;
   return `windows-link がエラーを返しました（HTTP ${status}）`;
