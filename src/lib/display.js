@@ -33,7 +33,11 @@ export function describeState(state) {
         ? { text: "終了", note: "起動中", failed: false }
         : { text: "起動", note: null, failed: false };
     case "library":
-      return { text: "一覧を開く", note: null, failed: false };
+      return {
+        text: "一覧を開く",
+        note: state.sign_in ? "ログインが必要です" : null,
+        failed: false,
+      };
     case "mute":
       return state.muted
         ? { text: "ミュート解除", note: "ミュート中", failed: false }
@@ -91,6 +95,20 @@ export function pressFailure(status, body) {
   }
   if (body?.message) return `Windows の操作に失敗しました: ${body.message}`;
   return `windows-link がエラーを返しました（HTTP ${status}）`;
+}
+
+/**
+ * Why signing in to a shop did not go through: the login window (status null with
+ * `closed`, or `not_panel` outside the panel's app), or windows-link refusing it.
+ * @param {number | null} status HTTP status, or null without an answer from windows-link
+ * @param {any} body the JSON error body, if any
+ */
+export function signInFailure(status, body) {
+  if (body?.error === "closed") return "ログインせずにログイン画面が閉じられました";
+  if (body?.error === "not_panel") return "ログインはタッチパネルのアプリからだけできます";
+  if (body?.error === "invalid_session")
+    return "ログインを確認できませんでした。もう一度ログインしてください";
+  return pressFailure(status, body);
 }
 
 /**

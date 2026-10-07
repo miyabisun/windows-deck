@@ -26,10 +26,22 @@
 
   /** @type {HTMLDialogElement | undefined} */
   let dialog = $state();
-  /** @type {{ items: any[], labels: Array<{ id: string, name: string, editable: boolean }>, hide: string[], partial: string | null, labels_locked: string | null } | null} */
+  /** @type {{ items: any[], labels: Array<{ id: string, name: string, editable: boolean }>, hide: string[], partial: string | null, labels_locked: string | null, sign_in?: string | null } | null} */
   let library = $state(null);
   /** @type {string | null} */
   let failure = $state(null);
+  /** whether the shop's login window is open */
+  let signingIn = $state(false);
+
+  /** Sign in to the library's shop, then read the library again. */
+  async function signIn() {
+    if (!library?.sign_in) return;
+    signingIn = true;
+    const failed = await link.signIn(library.sign_in);
+    signingIn = false;
+    if (failed) tell(failed);
+    else await load();
+  }
   let query = $state("");
   /** @type {string[]} */
   let active = $state([UNLABELED]);
@@ -244,7 +256,23 @@
         </button>
       </div>
     {/if}
-    {#if partialReason(library?.partial ?? null)}
+    {#if library?.sign_in}
+      <div class="sign-in" role="alert">
+        <p>
+          FANZA
+          にログインしていません。ログインすると、買ったゲームの一覧とダウンロードが始まります（ログイン画面はメインモニターに開きます）。
+        </p>
+        <button
+          type="button"
+          class="sign-in-button"
+          disabled={signingIn || disabled}
+          onclick={signIn}
+        >
+          {#if signingIn}<Spinner />{/if}
+          ログイン
+        </button>
+      </div>
+    {:else if partialReason(library?.partial ?? null)}
       <p class="partial">{partialReason(library?.partial ?? null)}</p>
     {/if}
     <p class="notice" role="status">{notice ?? ""}</p>
@@ -466,6 +494,42 @@
     color: var(--c-muted)
     font-size: var(--fs-sm)
     line-height: 1.5
+
+  // The shop wants the user to sign in: what that brings, and the way there.
+  .sign-in
+    display: flex
+    align-items: center
+    gap: var(--sp-3)
+    padding: var(--sp-3)
+    border-radius: var(--radius-sm)
+    background: var(--c-danger-subtle)
+    color: var(--c-danger)
+    font-size: var(--fs-sm)
+    line-height: 1.5
+
+    p
+      flex: 1
+      margin: 0
+
+  .sign-in-button
+    display: inline-flex
+    flex: none
+    align-items: center
+    gap: var(--sp-2)
+    min-height: 56px
+    padding: 0 var(--sp-5)
+    border: 1px solid currentColor
+    border-radius: var(--radius-md)
+    background: transparent
+    color: inherit
+    font: inherit
+    font-size: var(--fs-label)
+    cursor: pointer
+    touch-action: manipulation
+
+    &:disabled
+      opacity: 0.5
+      cursor: default
 
   // A toast over the bottom of the list; always present so that it is announced.
   .notice

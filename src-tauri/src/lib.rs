@@ -2,6 +2,7 @@
 //! automatic updates.
 
 pub mod config;
+pub mod fanza;
 pub mod logging;
 pub mod update;
 
@@ -149,6 +150,7 @@ pub fn run(context: tauri::Context) {
         })
         .invoke_handler(tauri::generate_handler![
             deck_config,
+            fanza::fanza_login,
             place_window,
             wait_note,
             window_handle

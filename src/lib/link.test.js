@@ -307,6 +307,47 @@ describe("Link libraries", () => {
     t.socket().send({ type: "snapshot", buttons: [library([])], desktops: [] });
   });
 
+  it("hands a shop's login window cookies to windows-link", async () => {
+    const cookies = [{ name: "login_secure_id", value: "v", domain: "dmm.co.jp" }];
+    /** @type {() => Promise<any[]>} */
+    let login = async () => cookies;
+    const requests = [];
+    /** @type {(response: any) => void} */
+    let respond = () => {};
+    const link = new Link("http://127.0.0.1:4730", {
+      WebSocket: FakeSocket,
+      fetch: (url, init) => {
+        requests.push({ url, init });
+        return new Promise((resolve) => (respond = resolve));
+      },
+      setTimeout: () => {},
+      signIn: () => login(),
+    });
+    const done = link.signIn("fanza");
+    await settle();
+    expect(requests[0].url).toBe("http://127.0.0.1:4730/fanza/session");
+    expect(requests[0].init.method).toBe("PUT");
+    expect(JSON.parse(requests[0].init.body)).toEqual({ cookies });
+    respond({ ok: true, status: 200, json: async () => ({ kept: 1 }) });
+    expect(await done).toBeNull();
+
+    const refused = link.signIn("fanza");
+    await settle();
+    respond({
+      ok: false,
+      status: 400,
+      json: async () => ({ error: "invalid_session", message: "x" }),
+    });
+    expect(await refused).toBe("ログインを確認できませんでした。もう一度ログインしてください");
+
+    // Closed before signing in: nothing goes to windows-link.
+    login = async () => {
+      throw { error: "closed" };
+    };
+    expect(await link.signIn("fanza")).toBe("ログインせずにログイン画面が閉じられました");
+    expect(requests).toHaveLength(2);
+  });
+
   it("reads a library button's games", async () => {
     const read = t.link.library("games");
     expect(t.requests[0].url).toBe("http://127.0.0.1:4730/buttons/games/library");

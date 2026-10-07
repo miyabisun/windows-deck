@@ -7,8 +7,10 @@ import {
   labelFailure,
   libraryFailure,
   pressFailure,
+  signInFailure,
   switchFailure,
 } from "./display.js";
+import { shopLogin } from "./window.js";
 
 /** The `pending` and `failures` key of a library game. */
 export const itemKey = (/** @type {string} */ id, /** @type {string} */ item) => `${id}/${item}`;
@@ -49,7 +51,7 @@ export class Link {
 
   /**
    * @param {string} base windows-link URL, such as `http://127.0.0.1:4730`
-   * @param {{ WebSocket?: any, fetch?: typeof fetch, setTimeout?: (fn: () => void, ms: number) => unknown }} [env]
+   * @param {{ WebSocket?: any, fetch?: typeof fetch, setTimeout?: (fn: () => void, ms: number) => unknown, signIn?: (shop: string, base: string) => Promise<any[]> }} [env]
    */
   constructor(base, env = {}) {
     this.#base = base.replace(/\/+$/, "");
@@ -57,6 +59,7 @@ export class Link {
       WebSocket: env.WebSocket ?? globalThis.WebSocket,
       fetch: env.fetch ?? ((...args) => globalThis.fetch(...args)),
       setTimeout: env.setTimeout ?? ((fn, ms) => globalThis.setTimeout(fn, ms)),
+      signIn: env.signIn ?? shopLogin,
     };
   }
 
@@ -140,6 +143,32 @@ export class Link {
    * A library button's games.
    * @returns {Promise<{ library: any, failure: string | null }>}
    */
+  /**
+   * Sign in to a shop (`fanza`) in the panel's login window, then hand its cookies to
+   * windows-link, which reads the games bought from then on.
+   * @param {string} shop
+   * @returns {Promise<string | null>} why it did not go through, or null
+   */
+  async signIn(shop) {
+    let cookies;
+    try {
+      cookies = await this.#env.signIn(shop, this.#base);
+    } catch (reason) {
+      return signInFailure(null, reason);
+    }
+    try {
+      const response = await this.#env.fetch(`${this.#base}/${encodeURIComponent(shop)}/session`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ cookies }),
+      });
+      if (response.ok) return null;
+      return signInFailure(response.status, await response.json().catch(() => null));
+    } catch {
+      return signInFailure(null, null);
+    }
+  }
+
   async library(id) {
     try {
       const response = await this.#env.fetch(

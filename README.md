@@ -90,6 +90,13 @@ searched. A game with several programs asks once which one starts it
 (the choice is remembered); its menu has **起動ファイルを選ぶ** to change it. Its labels are
 kept by windows-link, so they work without Steam.
 
+A `fanza.library` button opens the FANZA games bought the same way. While windows-link has no
+FANZA sign-in, the button says **ログインが必要です** and the list offers **ログイン**: it opens a
+login window of the panel's own on the primary monitor (shown on every virtual desktop),
+where you sign in to DMM yourself. Once the window reaches FANZA's library it closes and
+hands DMM's cookies to windows-link (needs windows-link 0.1.21 or later), which then lists
+and downloads the games.
+
 ## Requirements
 
 - Windows 10 or 11 (x64) with the WebView2 runtime (included in Windows 11)

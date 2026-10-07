@@ -7,6 +7,7 @@ import {
   mixerFailure,
   libraryFailure,
   pressFailure,
+  signInFailure,
   switchFailure,
 } from "./display.js";
 
@@ -162,6 +163,30 @@ describe("switchFailure", () => {
       "仮想デスクトップを切り替えられません: service stopped",
     );
     expect(switchFailure(null, null)).toBe("windows-link に届きませんでした");
+  });
+});
+
+describe("signing in to a shop", () => {
+  it("says on a library button when the shop needs signing in", () => {
+    expect(describeState({ kind: "library", pins: [], sign_in: "fanza" })).toEqual({
+      text: "一覧を開く",
+      note: "ログインが必要です",
+      failed: false,
+    });
+    expect(describeState({ kind: "library", pins: [], sign_in: null }).note).toBe(null);
+  });
+
+  it("explains a sign-in that did not go through", () => {
+    expect(signInFailure(null, { error: "closed" })).toBe(
+      "ログインせずにログイン画面が閉じられました",
+    );
+    expect(signInFailure(null, { error: "not_panel" })).toBe(
+      "ログインはタッチパネルのアプリからだけできます",
+    );
+    expect(signInFailure(400, { error: "invalid_session", message: "x" })).toBe(
+      "ログインを確認できませんでした。もう一度ログインしてください",
+    );
+    expect(signInFailure(null, null)).toBe("windows-link に届きませんでした");
   });
 });
 

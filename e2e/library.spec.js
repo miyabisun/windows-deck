@@ -345,3 +345,24 @@ test("with more games than fit, the list scrolls and each tile shows its whole n
   await game(page, "1059").scrollIntoViewIfNeeded();
   await expect(game(page, "1059")).toBeInViewport();
 });
+
+test("a shop that needs signing in says so on its button and in its list", async ({ page }) => {
+  await page.setViewportSize({ width: 1920, height: 1280 });
+  mock.link.buttons[mock.link.buttons.length - 1].state.sign_in = "fanza";
+  mock.link.library.sign_in = "fanza";
+  await open(page);
+  const tile = page.locator('[data-button="games"]');
+  await expect(tile).toContainText("ログインが必要です");
+  await tile.click();
+  const banner = dialog(page).getByRole("alert");
+  await expect(banner).toContainText("FANZA にログインしていません");
+  const signIn = dialog(page).getByRole("button", { name: "ログイン", exact: true });
+  const size = await signIn.boundingBox();
+  expect(size.height).toBeGreaterThanOrEqual(48);
+  await page.screenshot({ path: "test-results/library-sign-in.png" });
+  // Only the panel's app has a login window.
+  await signIn.click();
+  await expect(dialog(page).getByRole("status")).toHaveText(
+    "ログインはタッチパネルのアプリからだけできます",
+  );
+});
