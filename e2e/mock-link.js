@@ -39,7 +39,7 @@ export function initialDesktops(current = 0) {
 export const libraryButton = (pins = []) => ({
   id: "games",
   type: "steam.library",
-  label: "ゲーム検索",
+  label: "Steam",
   desktop: null,
   except: [],
   icon: false,
@@ -174,6 +174,10 @@ export async function startMockLink() {
     started: [],
     /** @type {string[]} games whose folder was opened */
     folders: [],
+    /** @type {string[]} library buttons asked to update */
+    updates: [],
+    /** @type {{ status: number, body: any } | null} the next update's answer, else Steam's counts */
+    updateAnswer: null,
   };
   const sockets = new Set();
   const broadcast = (message) => {
@@ -238,6 +242,18 @@ export async function startMockLink() {
       return res.end(
         '<svg xmlns="http://www.w3.org/2000/svg" width="560" height="420"><rect width="560" height="420" fill="#2e86c1"/></svg>',
       );
+    }
+    const update = req.url.match(/^\/buttons\/([^/]+)\/library\/update$/);
+    if (req.method === "POST" && update && !link.down) {
+      link.updates.push(update[1]);
+      const { status, body } = link.updateAnswer ?? {
+        status: 200,
+        body: { updates: 3, installs: 24 },
+      };
+      link.updateAnswer = null;
+      res.statusCode = status;
+      res.setHeader("Content-Type", "application/json");
+      return res.end(JSON.stringify(body));
     }
     const dl = req.url.match(
       /^\/buttons\/dlsite\/library(?:\/([^/]+)\/(start|programs|program|image|keys))?$/,

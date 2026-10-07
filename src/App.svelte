@@ -1,5 +1,6 @@
 <script>
   import { onMount } from "svelte";
+  import ContextMenu from "./lib/ContextMenu.svelte";
   import DesktopTabs from "./lib/DesktopTabs.svelte";
   import GameMenu from "./lib/GameMenu.svelte";
   import LibraryModal from "./lib/LibraryModal.svelte";
@@ -7,6 +8,7 @@
   import ProgramChooser from "./lib/ProgramChooser.svelte";
   import Spinner from "./lib/Spinner.svelte";
   import Tile from "./lib/Tile.svelte";
+  import Toast, { Notice } from "./lib/Toast.svelte";
   import { stateIcon } from "./lib/display.js";
   import { pictureUrl, pinsOf } from "./lib/library.js";
   import { Link, itemKey } from "./lib/link.svelte.js";
@@ -34,6 +36,17 @@
   let pinMenu = $state(null);
   /** @type {{ button: string, pin: { id: string, name: string } } | null} the pinned game whose program is being chosen */
   let pinChoice = $state(null);
+  /** @type {{ button: string, label: string, x: number, y: number } | null} the library button whose menu is open */
+  let libraryMenu = $state(null);
+  /** what the last library update started, shown for a few seconds */
+  const notice = new Notice();
+
+  /** @param {string} button */
+  async function updateLibrary(button) {
+    const started = await link?.updateLibrary(button);
+    // A failure stays on the button (Link keeps it).
+    if (started) notice.show(started);
+  }
 
   /** @param {string} button @param {{ id: string, name: string }} pin */
   async function startPin(button, pin) {
@@ -58,6 +71,7 @@
     return () => {
       document.removeEventListener("contextmenu", noMenu);
       started?.stop();
+      notice.stop();
     };
   });
 
@@ -136,12 +150,17 @@
           pending={!!link.pending[button.id]}
           failure={link.failures[button.id]}
           disabled={link.status !== "connected"}
-          onpress={() =>
-            button.state?.kind === "library"
-              ? (opened = button.id)
-              : button.state?.kind === "mixer"
-                ? (mixing = true)
-                : link.press(button.id)}
+          onpress={() => {
+            if (button.state?.kind === "library") {
+              // Opening the library is the next press, which clears a failed update.
+              delete link.failures[button.id];
+              opened = button.id;
+            } else if (button.state?.kind === "mixer") mixing = true;
+            else link.press(button.id);
+          }}
+          onlong={button.state?.kind === "library"
+            ? (point) => (libraryMenu = { button: button.id, label: button.label, ...point })
+            : null}
         />
       {/each}
       {#each pins as { button, pin, whole } (itemKey(button, pin.id))}
@@ -177,6 +196,18 @@
     onclose={() => (pinChoice = null)}
   />
 {/if}
+
+{#if link && libraryMenu}
+  <ContextMenu
+    x={libraryMenu.x}
+    y={libraryMenu.y}
+    title={libraryMenu.label}
+    items={[{ label: "ライブラリを更新", onselect: () => updateLibrary(libraryMenu.button) }]}
+    onclose={() => (libraryMenu = null)}
+  />
+{/if}
+
+<Toast {notice} fixed />
 
 {#if link && pinMenu}
   <GameMenu

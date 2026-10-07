@@ -9,6 +9,8 @@ import {
   pressFailure,
   signInFailure,
   switchFailure,
+  updateFailure,
+  updateResult,
 } from "./display.js";
 import { shopLogin } from "./window.js";
 
@@ -140,9 +142,32 @@ export class Link {
   }
 
   /**
-   * A library button's games.
-   * @returns {Promise<{ library: any, failure: string | null }>}
+   * Bring a library button's games up to date (windows-link decides how for each
+   * library). Ignored while it is already being updated; a failure stays on the button
+   * until its next update.
+   * @param {string} id the library button
+   * @returns {Promise<string | null>} what was started, or null when nothing was
    */
+  async updateLibrary(id) {
+    if (this.pending[id] || this.status !== "connected") return null;
+    this.pending[id] = true;
+    delete this.failures[id];
+    try {
+      const response = await this.#env.fetch(
+        `${this.#base}/buttons/${encodeURIComponent(id)}/library/update`,
+        { method: "POST" },
+      );
+      const body = await response.json().catch(() => null);
+      if (response.ok) return updateResult(body);
+      this.failures[id] = updateFailure(response.status, body);
+    } catch {
+      this.failures[id] = updateFailure(null, null);
+    } finally {
+      delete this.pending[id];
+    }
+    return null;
+  }
+
   /**
    * Sign in to a shop (`fanza`) in the panel's login window, then hand its cookies to
    * windows-link, which reads the games bought from then on.
@@ -169,6 +194,10 @@ export class Link {
     }
   }
 
+  /**
+   * A library button's games.
+   * @returns {Promise<{ library: any, failure: string | null }>}
+   */
   async library(id) {
     try {
       const response = await this.#env.fetch(

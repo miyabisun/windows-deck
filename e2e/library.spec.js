@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { libraryButton, startMockLink } from "./mock-link.js";
+import { dlsiteButton, libraryButton, startMockLink } from "./mock-link.js";
 
 /** @type {Awaited<ReturnType<typeof startMockLink>>} */
 let mock;
@@ -14,7 +14,7 @@ test.afterEach(async () => {
 });
 
 const open = (page) => page.goto(`/?link=${encodeURIComponent(mock.url)}`);
-const dialog = (page) => page.getByRole("dialog", { name: "ゲーム検索" });
+const dialog = (page) => page.getByRole("dialog", { name: "Steam" });
 const game = (page, id) => dialog(page).locator(`[data-button="${id}"]`);
 const names = (page) => dialog(page).locator(".tile .label").allTextContents();
 const chip = (page, name) => dialog(page).getByRole("button", { name, exact: true });
@@ -365,4 +365,69 @@ test("a shop that needs signing in says so on its button and in its list", async
   await expect(dialog(page).getByRole("status")).toHaveText(
     "ログインはタッチパネルのアプリからだけできます",
   );
+});
+
+test("a library button's menu updates the library and says what started", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await open(page);
+  const tile = page.locator('[data-button="games"]');
+  await expect(tile).toContainText(/Steam\s*ライブラリ/);
+  await tile.click({ button: "right" });
+  const menu = page.getByRole("menu", { name: "Steam" });
+  await expect(menu).toBeVisible();
+  // A right click does not open the library (the menu is a dialog of the same name).
+  const search = page.getByRole("searchbox", { name: "名前で探す" });
+  await expect(search).toHaveCount(0);
+  await expectTabTall(page, [page.getByRole("menuitem", { name: "ライブラリを更新" })]);
+  await page.screenshot({ path: "test-results/library-update-menu.png" });
+  await page.getByRole("menuitem", { name: "ライブラリを更新" }).click();
+  await expect(menu).toHaveCount(0);
+  const toast = page.getByRole("status").filter({ hasText: "アップデート" });
+  await expect(toast).toHaveText(
+    "アップデート 3 件を始めました。インストール 24 件は Steam の画面で確定してください",
+  );
+  expect(mock.link.updates).toEqual(["games"]);
+  await page.screenshot({ path: "test-results/library-update-toast.png" });
+  // It goes after a few seconds.
+  await expect(toast).toHaveCount(0, { timeout: 5000 });
+
+  // A long press opens the same menu, not the library.
+  await longPress(page, tile);
+  await expect(menu).toBeVisible();
+  await expect(search).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await expect(menu).toHaveCount(0);
+});
+
+test("a library that cannot be updated says why on its button until it is opened", async ({
+  page,
+}) => {
+  mock.link.updateAnswer = {
+    status: 409,
+    body: { error: "update_unavailable", message: "Steam is not running" },
+  };
+  await open(page);
+  const tile = page.locator('[data-button="games"]');
+  await tile.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "ライブラリを更新" }).click();
+  await expect(tile).toContainText("Steam が起動していないため、ライブラリを更新できません");
+  await expect(tile).toHaveClass(/failed/);
+  await tile.click();
+  await expect(dialog(page)).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(tile).not.toContainText("ライブラリを更新できません");
+});
+
+test("a shop's update starts its downloads", async ({ page }) => {
+  mock.link.buttons.push(dlsiteButton());
+  mock.link.updateAnswer = { status: 202, body: { round: true } };
+  await open(page);
+  const tile = page.locator('[data-button="dlsite"]');
+  await expect(tile).toContainText(/DLsite\s*ライブラリ/);
+  await tile.click({ button: "right" });
+  await page.getByRole("menu", { name: "DLsite" }).getByRole("menuitem").click();
+  await expect(page.getByRole("status").filter({ hasText: "ダウンロード" })).toHaveText(
+    "ダウンロードと更新を始めました（進み具合はライブラリに出ます）",
+  );
+  expect(mock.link.updates).toEqual(["dlsite"]);
 });

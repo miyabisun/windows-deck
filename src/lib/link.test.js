@@ -297,7 +297,7 @@ describe("Link libraries", () => {
   const library = (pins) => ({
     id: "games",
     type: "steam.library",
-    label: "ゲーム検索",
+    label: "Steam",
     state: { kind: "library", pins },
   });
   const sf6 = { id: "1364780", name: "Street Fighter 6" };
@@ -379,6 +379,30 @@ describe("Link libraries", () => {
     t.reply(409, { error: "choose_program", message: "choose" });
     expect(await started).toBe("choose");
     expect(t.link.failures[itemKey("games", "1364780")]).toBeUndefined();
+  });
+
+  it("updates a library, showing its button as pending, and keeps a failure on it", async () => {
+    let updated = t.link.updateLibrary("games");
+    expect(t.requests[0].url).toBe("http://127.0.0.1:4730/buttons/games/library/update");
+    expect(t.requests[0].init.method).toBe("POST");
+    expect(t.link.pending.games).toBe(true);
+    // Pressing it again meanwhile asks nothing more.
+    expect(await t.link.updateLibrary("games")).toBeNull();
+    expect(t.requests).toHaveLength(1);
+    t.reply(200, { updates: 1, installs: 0 });
+    expect(await updated).toBe("アップデート 1 件を始めました");
+    expect(t.link.pending.games).toBeUndefined();
+
+    updated = t.link.updateLibrary("games");
+    t.reply(409, { error: "update_unavailable", message: "Steam is not running" });
+    expect(await updated).toBeNull();
+    expect(t.link.failures.games).toBe("Steam が起動していないため、ライブラリを更新できません");
+
+    // The next update starts without the old failure.
+    updated = t.link.updateLibrary("games");
+    expect(t.link.failures.games).toBeUndefined();
+    t.reply(202, { round: true });
+    expect(await updated).toBe("ダウンロードと更新を始めました（進み具合はライブラリに出ます）");
   });
 
   it("reads a game's programs and remembers the chosen one", async () => {

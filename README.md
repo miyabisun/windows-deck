@@ -97,6 +97,14 @@ where you sign in to DMM yourself. Once the window reaches FANZA's library it cl
 hands DMM's cookies to windows-link (needs windows-link 0.1.21 or later), which then lists
 and downloads the games.
 
+Long-press (or right-click) a library button for **ライブラリを更新** (needs windows-link
+0.1.22 or later). For Steam it starts the updates of the games outside the hidden labels
+and opens Steam's install screen for those not installed, where you confirm the folder and
+any EULA. For DLsite and FANZA it starts windows-link's downloads of the games bought and
+not there yet, and of DLsite's updates, now instead of at the next 6-hourly round. What
+started shows at the bottom of the screen for a few seconds; when nothing could start,
+the button says why.
+
 ## Requirements
 
 - Windows 10 or 11 (x64) with the WebView2 runtime (included in Windows 11)

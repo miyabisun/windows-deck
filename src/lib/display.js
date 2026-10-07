@@ -1,6 +1,6 @@
 // What a button shows for a windows-link state, and why a press failed.
 
-import { labelsLockedReason } from "./library.js";
+import { labelsLockedReason, steamDown } from "./library.js";
 
 const UNKNOWN = { text: "状態不明", note: null, failed: false };
 
@@ -34,7 +34,7 @@ export function describeState(state) {
         : { text: "起動", note: null, failed: false };
     case "library":
       return {
-        text: "一覧を開く",
+        text: "ライブラリ",
         note: state.sign_in ? "ログインが必要です" : null,
         failed: false,
       };
@@ -122,6 +122,37 @@ export function libraryFailure(status, body) {
   if (body?.error === "not_found")
     return "ライブラリにこのゲームがありません（一覧を開き直してください）";
   if (body?.error === "not_downloaded") return `まだこの PC にありません（${body.message}）`;
+  return pressFailure(status, body);
+}
+
+/**
+ * What updating a library started: Steam's updates and the installs it asks to confirm on
+ * its own window, or a shop's round of downloads.
+ * @param {any} body windows-link's answer
+ */
+export function updateResult(body) {
+  if (typeof body?.updates !== "number")
+    return "ダウンロードと更新を始めました（進み具合はライブラリに出ます）";
+  const said = [];
+  if (body.updates > 0) said.push(`アップデート ${body.updates} 件を始めました`);
+  if (body.installs > 0)
+    said.push(`インストール ${body.installs} 件は Steam の画面で確定してください`);
+  return said.join("。") || "アップデート・インストールするゲームはありません";
+}
+
+/**
+ * The reason shown on a library button after it could not be updated.
+ * @param {number | null} status HTTP status, or null when the request did not get an answer
+ * @param {any} body the JSON error body, if any
+ */
+export function updateFailure(status, body) {
+  if (body?.error === "sign_in")
+    return "ログインが必要です（ライブラリを開いてログインしてください）";
+  if (body?.error === "update_unavailable")
+    return (
+      steamDown(body.message, "ライブラリを更新できません") ??
+      `ライブラリを更新できません: ${body.message}`
+    );
   return pressFailure(status, body);
 }
 

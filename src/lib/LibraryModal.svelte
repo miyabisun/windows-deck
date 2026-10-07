@@ -7,6 +7,7 @@
   import Icon from "./Icon.svelte";
   import Spinner from "./Spinner.svelte";
   import Tile from "./Tile.svelte";
+  import Toast, { Notice } from "./Toast.svelte";
   import {
     DRAG_TYPE,
     UNLABELED,
@@ -18,8 +19,6 @@
   } from "./library.js";
   import { itemKey } from "./link.svelte.js";
   import { longpress } from "./longpress.js";
-
-  const NOTICE_MS = 3000;
 
   /** @type {{ link: import("./link.svelte.js").Link, button: any, onclose: () => void }} */
   let { link, button, onclose } = $props();
@@ -45,10 +44,8 @@
   let query = $state("");
   /** @type {string[]} */
   let active = $state([UNLABELED]);
-  /** @type {string | null} what the last long press did, shown for a few seconds */
-  let notice = $state(null);
-  /** @type {ReturnType<typeof setTimeout> | undefined} */
-  let noticeTimer;
+  /** what the last long press did, shown for a few seconds */
+  const notice = new Notice();
   /** @type {{ item: any, x: number, y: number } | null} the game whose menu is open */
   let gameMenu = $state(null);
   /** @type {{ label: any, x: number, y: number } | null} the label whose menu is open */
@@ -87,14 +84,12 @@
     // A modal dialog keeps the focus inside and starts it on the search field.
     dialog?.showModal();
     load();
-    return () => clearTimeout(noticeTimer);
+    return () => notice.stop();
   });
 
   /** @param {string} text */
   function tell(text) {
-    notice = text;
-    clearTimeout(noticeTimer);
-    noticeTimer = setTimeout(() => (notice = null), NOTICE_MS);
+    notice.show(text);
   }
 
   /** Run a label change, then show its failure or read the library again. */
@@ -275,7 +270,7 @@
     {:else if partialReason(library?.partial ?? null)}
       <p class="partial">{partialReason(library?.partial ?? null)}</p>
     {/if}
-    <p class="notice" role="status">{notice ?? ""}</p>
+    <Toast {notice} />
     <div class="scroll">
       <div class="items">
         {#if failure}
@@ -530,25 +525,6 @@
     &:disabled
       opacity: 0.5
       cursor: default
-
-  // A toast over the bottom of the list; always present so that it is announced.
-  .notice
-    position: absolute
-    bottom: var(--sp-5)
-    left: 50%
-    max-width: calc(100% - 2 * var(--sp-5))
-    margin: 0
-    padding: var(--sp-3) var(--sp-4)
-    border: 1px solid var(--c-border)
-    border-radius: var(--radius-md)
-    background: var(--c-surface-raised)
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25)
-    font-size: var(--fs-md)
-    transform: translateX(-50%)
-    pointer-events: none
-
-    &:empty
-      opacity: 0
 
   // The list scrolls inside the dialog; the search and labels stay in place. The grid
   // itself has no fixed height, so that its rows fit the tiles.

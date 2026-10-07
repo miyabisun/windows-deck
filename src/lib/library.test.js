@@ -113,12 +113,16 @@ describe("partialReason", () => {
 describe("labelsLockedReason", () => {
   it("says in Japanese why labels cannot be changed", () => {
     expect(labelsLockedReason(null)).toBeNull();
-    expect(labelsLockedReason("Steam is not running")).toContain("Steam が起動していない");
+    expect(labelsLockedReason("Steam is not running")).toBe(
+      "Steam が起動していないため、ラベルは変更できません",
+    );
     expect(
       labelsLockedReason(
         "Steam does not accept remote control: create .cef-enable-remote-debugging in the Steam folder and restart Steam",
       ),
-    ).toContain(".cef-enable-remote-debugging を置いて");
+    ).toBe(
+      "Steam の操作口が無効なため、ラベルは変更できません（Steam フォルダに .cef-enable-remote-debugging を置いて Steam を再起動）",
+    );
     expect(labelsLockedReason("timeout")).toBe("ラベルを変更できません: timeout");
   });
 });

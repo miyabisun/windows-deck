@@ -9,6 +9,8 @@ import {
   pressFailure,
   signInFailure,
   switchFailure,
+  updateFailure,
+  updateResult,
 } from "./display.js";
 
 describe("describeState of the mute button and the mixer", () => {
@@ -169,7 +171,7 @@ describe("switchFailure", () => {
 describe("signing in to a shop", () => {
   it("says on a library button when the shop needs signing in", () => {
     expect(describeState({ kind: "library", pins: [], sign_in: "fanza" })).toEqual({
-      text: "一覧を開く",
+      text: "ライブラリ",
       note: "ログインが必要です",
       failed: false,
     });
@@ -227,7 +229,7 @@ describe("launch and game buttons", () => {
 describe("library buttons", () => {
   it("say that a press opens the list", () => {
     expect(describeState({ kind: "library", pins: [] })).toEqual({
-      text: "一覧を開く",
+      text: "ライブラリ",
       note: null,
       failed: false,
     });
@@ -257,6 +259,55 @@ describe("library buttons", () => {
     expect(libraryFailure(409, { error: "no_program" })).toBe(
       "起動できるファイルが見つかりません（ローカルファイル閲覧で中を確かめてください）",
     );
+  });
+});
+
+describe("updating a library", () => {
+  it("says what Steam started", () => {
+    expect(updateResult({ updates: 3, installs: 24 })).toBe(
+      "アップデート 3 件を始めました。インストール 24 件は Steam の画面で確定してください",
+    );
+    expect(updateResult({ updates: 1, installs: 0 })).toBe("アップデート 1 件を始めました");
+    expect(updateResult({ updates: 0, installs: 2 })).toBe(
+      "インストール 2 件は Steam の画面で確定してください",
+    );
+    expect(updateResult({ updates: 0, installs: 0 })).toBe(
+      "アップデート・インストールするゲームはありません",
+    );
+  });
+
+  it("says that a shop's downloads started", () => {
+    expect(updateResult({ round: true })).toBe(
+      "ダウンロードと更新を始めました（進み具合はライブラリに出ます）",
+    );
+  });
+
+  it("explains why a library could not be updated", () => {
+    expect(updateFailure(409, { error: "sign_in", message: "x" })).toBe(
+      "ログインが必要です（ライブラリを開いてログインしてください）",
+    );
+    expect(
+      updateFailure(409, { error: "update_unavailable", message: "Steam is not running" }),
+    ).toBe("Steam が起動していないため、ライブラリを更新できません");
+    expect(
+      updateFailure(409, {
+        error: "update_unavailable",
+        message:
+          "Steam does not accept remote control: create .cef-enable-remote-debugging in the Steam folder and restart Steam",
+      }),
+    ).toBe(
+      "Steam の操作口が無効なため、ライブラリを更新できません（Steam フォルダに .cef-enable-remote-debugging を置いて Steam を再起動）",
+    );
+    expect(
+      updateFailure(409, {
+        error: "update_unavailable",
+        message: "DLsite cannot download games now",
+      }),
+    ).toBe("ライブラリを更新できません: DLsite cannot download games now");
+    expect(updateFailure(500, { error: "update", message: "TypeError: boom" })).toBe(
+      "Windows の操作に失敗しました: TypeError: boom",
+    );
+    expect(updateFailure(null, null)).toBe("windows-link に届きませんでした");
   });
 });
 

@@ -87,10 +87,20 @@ export function partialReason(reason) {
  */
 export function labelsLockedReason(reason) {
   if (!reason) return null;
-  if (reason.includes("not running")) return "Steam が起動していないため、ラベルは変更できません";
+  return steamDown(reason, "ラベルは変更できません") ?? `ラベルを変更できません: ${reason}`;
+}
+
+/**
+ * Why windows-link cannot ask Steam, in Japanese, ending in `cannot` (what cannot be done),
+ * or null when `reason` is about something else.
+ * @param {string} reason windows-link's message
+ * @param {string} cannot such as 「ラベルは変更できません」
+ */
+export function steamDown(reason, cannot) {
+  if (reason.includes("not running")) return `Steam が起動していないため、${cannot}`;
   if (reason.includes("cef-enable-remote-debugging"))
-    return "Steam の操作口が無効なため、ラベルは変更できません（Steam フォルダに .cef-enable-remote-debugging を置いて Steam を再起動）";
-  return `ラベルを変更できません: ${reason}`;
+    return `Steam の操作口が無効なため、${cannot}（Steam フォルダに .cef-enable-remote-debugging を置いて Steam を再起動）`;
+  return null;
 }
 
 /**
