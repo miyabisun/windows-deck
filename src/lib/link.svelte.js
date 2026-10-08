@@ -277,13 +277,17 @@ export class Link {
   }
 
   /**
-   * Change one program's volume; answers the mixer.
+   * Change one program's volume and/or its own mute; answers the mixer.
+   * @param {string} process
+   * @param {{ volume?: number, muted?: boolean }} change
    * @returns {Promise<{ mixer: any, failure: string | null }>}
    */
-  async setAppVolume(process, volume) {
-    const { status, body } = await this.#call("PUT", `/audio/apps/${encodeURIComponent(process)}`, {
-      volume,
-    });
+  async setApp(process, change) {
+    const { status, body } = await this.#call(
+      "PUT",
+      `/audio/apps/${encodeURIComponent(process)}`,
+      change,
+    );
     return status === 0
       ? { mixer: body, failure: null }
       : { mixer: null, failure: mixerFailure(status, body) };

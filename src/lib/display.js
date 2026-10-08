@@ -42,6 +42,11 @@ export function describeState(state) {
       return state.muted
         ? { text: "ミュート解除", note: "ミュート中", failed: false }
         : { text: "ミュート", note: `音量 ${Math.round(state.volume * 100)}%`, failed: false };
+    case "app_mute":
+      if (!state.running) return { text: "起動していません", note: null, failed: false };
+      return state.muted
+        ? { text: "ミュート解除", note: "ミュート中", failed: false }
+        : { text: "ミュート", note: null, failed: false };
     case "mixer":
       return {
         text: `音量 ${Math.round(state.volume * 100)}%`,
@@ -66,6 +71,7 @@ export function stateIcon(state) {
     case "output":
       return state.options?.find((/** @type {any} */ o) => o.alias === state.current)?.icon ?? null;
     case "mute":
+    case "app_mute":
       return state.muted ? "muted" : "sound";
     case "mixer":
       return "volume";

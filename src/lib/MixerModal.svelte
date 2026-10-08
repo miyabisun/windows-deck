@@ -8,7 +8,7 @@
 
   /** @type {HTMLDialogElement | undefined} */
   let dialog = $state();
-  /** @type {{ master: { volume: number, muted: boolean }, apps: Array<{ process: string, name: string, volume: number }> } | null} */
+  /** @type {{ master: { volume: number, muted: boolean }, apps: Array<{ process: string, name: string, volume: number, muted: boolean }> } | null} */
   let mixer = $state(null);
   /** @type {string | null} */
   let failure = $state(null);
@@ -63,14 +63,56 @@
     change("master", volume, (v) => link.setMaster({ volume: v }));
   }
 
-  /** @param {{ process: string, volume: number }} app @param {Event} event */
+  /** @param {{ process: string, volume: number, muted: boolean }} app @param {Event} event */
   function setApp(app, event) {
     const volume = value(event);
     app.volume = volume;
+    app.muted = false;
     const { process } = app;
-    change(`app:${process}`, volume, (v) => link.setAppVolume(process, v));
+    change(`app:${process}`, volume, (v) => link.setApp(process, { volume: v }));
+  }
+
+  /**
+   * Mute or unmute, as the speaker of a row in Windows' volume mixer does, and take
+   * windows-link's answer unless a slider is still moving.
+   * @param {Promise<{ mixer: any, failure: string | null }>} sent
+   */
+  async function toggled(sent) {
+    const result = await sent;
+    failure = result.failure;
+    if (result.mixer && !Object.values(queues).some((q) => q.busy)) mixer = result.mixer;
+  }
+
+  function toggleWhole() {
+    if (!mixer) return;
+    const muted = !mixer.master.muted;
+    mixer.master = { ...mixer.master, muted };
+    toggled(link.setMaster({ muted }));
+  }
+
+  /** @param {{ process: string, muted: boolean }} app */
+  function toggleApp(app) {
+    app.muted = !app.muted;
+    toggled(link.setApp(app.process, { muted: app.muted }));
   }
 </script>
+
+{#snippet speaker(
+  /** @type {string} */ name,
+  /** @type {boolean} */ muted,
+  /** @type {() => void} */ onclick,
+)}
+  <button
+    type="button"
+    class="speaker"
+    class:off={muted}
+    aria-label="{name}のミュート"
+    aria-pressed={muted}
+    {onclick}
+  >
+    <Icon name={muted ? "muted" : "sound"} />
+  </button>
+{/snippet}
 
 <dialog
   bind:this={dialog}
@@ -96,6 +138,7 @@
     {/if}
     {#if mixer}
       <div class="row whole">
+        {@render speaker("全体", mixer.master.muted, toggleWhole)}
         <span class="name">
           全体
           {#if mixer.master.muted}<span class="muted">ミュート中</span>{/if}
@@ -115,7 +158,11 @@
       <div class="apps">
         {#each mixer.apps as app (app.process)}
           <div class="row">
-            <span class="name" title={app.process}>{app.name}</span>
+            {@render speaker(app.name, app.muted, () => toggleApp(app))}
+            <span class="name" title={app.process}>
+              {app.name}
+              {#if app.muted}<span class="muted">ミュート中</span>{/if}
+            </span>
             <input
               type="range"
               min="0"
@@ -199,7 +246,7 @@
 
   .row
     display: grid
-    grid-template-columns: 200px 1fr 4.5em
+    grid-template-columns: 56px 200px 1fr 4.5em
     align-items: center
     gap: var(--sp-4)
     min-height: var(--row-height)
@@ -218,6 +265,29 @@
     overflow: hidden
     text-overflow: ellipsis
     white-space: nowrap
+
+  // The speaker that mutes the row, crossed out in red while muted.
+  .speaker
+    display: inline-flex
+    align-items: center
+    justify-content: center
+    width: 56px
+    height: 56px
+    padding: 0
+    border: 0
+    background: transparent
+    color: var(--c-on-surface)
+    font-size: var(--fs-state)
+    cursor: pointer
+    touch-action: manipulation
+    -webkit-tap-highlight-color: transparent
+
+    &.off
+      color: var(--c-danger)
+
+    &:focus-visible
+      outline: 2px solid var(--c-accent)
+      outline-offset: 2px
 
   .muted
     display: block

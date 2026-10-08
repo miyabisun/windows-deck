@@ -50,8 +50,8 @@ export const libraryButton = (pins = []) => ({
 export const initialMixer = () => ({
   master: { volume: 0.45, muted: false },
   apps: [
-    { process: "Discord.exe", name: "Discord", volume: 1 },
-    { process: "StreetFighter6.exe", name: "StreetFighter6", volume: 0.2 },
+    { process: "Discord.exe", name: "Discord", volume: 1, muted: false },
+    { process: "StreetFighter6.exe", name: "StreetFighter6", volume: 0.2, muted: false },
   ],
 });
 
@@ -73,6 +73,17 @@ export const mixerButton = (master) => ({
   except: [],
   icon: false,
   state: { kind: "mixer", ...master },
+});
+
+/** An `audio.app_mute_toggle` button for Street Fighter 6, following its mixer row `app`. */
+export const appMuteButton = (app) => ({
+  id: "sf6-mute",
+  type: "audio.app_mute_toggle",
+  label: "スト6 音声",
+  desktop: null,
+  except: [],
+  icon: false,
+  state: { kind: "app_mute", running: !!app, muted: app?.muted ?? false },
 });
 
 /** A `dlsite.library` button, whose pictures are program icons. */
@@ -406,6 +417,26 @@ export async function startMockLink() {
         }
       }
     };
+    // An app's mute button follows its mixer row.
+    const appChanged = () => {
+      const index = link.buttons.findIndex((b) => b.id === "sf6-mute");
+      if (index < 0) return;
+      const app = link.mixer.apps.find((a) => a.process === "StreetFighter6.exe");
+      link.buttons[index] = appMuteButton(app);
+      broadcast({ type: "button", button: link.buttons[index] });
+    };
+    if (req.url === "/buttons/sf6-mute/press" && req.method === "POST" && !link.down) {
+      link.presses.push("sf6-mute");
+      const app = link.mixer.apps.find((a) => a.process === "StreetFighter6.exe");
+      res.setHeader("Content-Type", "application/json");
+      if (!app) {
+        res.statusCode = 409;
+        return res.end(JSON.stringify({ error: "not_running", message: "no audio session" }));
+      }
+      app.muted = !app.muted;
+      appChanged();
+      return res.end(JSON.stringify({ button: link.buttons.find((b) => b.id === "sf6-mute") }));
+    }
     if (req.url === "/audio/mixer" && req.method === "GET" && !link.down) {
       res.setHeader("Content-Type", "application/json");
       return res.end(JSON.stringify(link.mixer));
@@ -423,14 +454,20 @@ export async function startMockLink() {
     }
     const appVolume = req.url.match(/^\/audio\/apps\/([^/]+)$/);
     if (appVolume && req.method === "PUT" && !link.down) {
-      const { volume } = await readJson(req);
+      const change = await readJson(req);
       const app = link.mixer.apps.find((a) => a.process === decodeURIComponent(appVolume[1]));
       res.setHeader("Content-Type", "application/json");
       if (!app) {
         res.statusCode = 404;
         return res.end(JSON.stringify({ error: "not_found", message: "no sound" }));
       }
-      app.volume = volume;
+      // A volume alone unmutes, as windows-link does.
+      if (change.volume !== undefined) {
+        app.volume = change.volume;
+        app.muted = false;
+      }
+      if (change.muted !== undefined) app.muted = change.muted;
+      appChanged();
       return res.end(JSON.stringify(link.mixer));
     }
     if (req.url === "/buttons/mute/press" && req.method === "POST" && !link.down) {

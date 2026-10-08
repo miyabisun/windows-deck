@@ -282,6 +282,24 @@ describe("Link desktop files and sleep", () => {
     expect(t.link.desktopFailure).toBe("「SF6」はもうあります");
   });
 
+  it("mutes an app by itself and answers with the mixer, or says why not", async () => {
+    let changed = t.link.setApp("BlueArchive.exe", { muted: true });
+    expect(t.requests[0].url).toBe("http://127.0.0.1:4730/audio/apps/BlueArchive.exe");
+    expect(t.requests[0].init.method).toBe("PUT");
+    expect(JSON.parse(t.requests[0].init.body)).toEqual({ muted: true });
+    const mixer = { master: { volume: 0.5, muted: false }, apps: [] };
+    t.reply(200, mixer);
+    expect(await changed).toEqual({ mixer, failure: null });
+
+    changed = t.link.setApp("BlueArchive.exe", { volume: 0.3 });
+    expect(JSON.parse(t.requests[1].init.body)).toEqual({ volume: 0.3 });
+    t.reply(404, { error: "not_found", message: "no sound" });
+    expect(await changed).toEqual({
+      mixer: null,
+      failure: "このアプリは今は音を出していません（ミキサーを開き直してください）",
+    });
+  });
+
   it("asks windows-link to put the PC to sleep", async () => {
     t.socket().send({ type: "snapshot", buttons: [], desktops: [] });
     const slept = t.link.sleep();

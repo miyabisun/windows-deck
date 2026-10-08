@@ -36,6 +36,24 @@ describe("describeState of the mute button and the mixer", () => {
       failed: false,
     });
   });
+
+  it("says what a press does to an app's own mute, and when it has no sound", () => {
+    expect(describeState({ kind: "app_mute", running: true, muted: false })).toEqual({
+      text: "ミュート",
+      note: null,
+      failed: false,
+    });
+    expect(describeState({ kind: "app_mute", running: true, muted: true })).toEqual({
+      text: "ミュート解除",
+      note: "ミュート中",
+      failed: false,
+    });
+    expect(describeState({ kind: "app_mute", running: false, muted: false })).toEqual({
+      text: "起動していません",
+      note: null,
+      failed: false,
+    });
+  });
 });
 
 describe("stateIcon", () => {
@@ -55,6 +73,8 @@ describe("stateIcon", () => {
     expect(stateIcon(output(null, ["speaker", "headphones"]))).toBe(null);
     expect(stateIcon({ kind: "mute", muted: false, volume: 1 })).toBe("sound");
     expect(stateIcon({ kind: "mute", muted: true, volume: 1 })).toBe("muted");
+    expect(stateIcon({ kind: "app_mute", running: true, muted: false })).toBe("sound");
+    expect(stateIcon({ kind: "app_mute", running: true, muted: true })).toBe("muted");
     expect(stateIcon({ kind: "mixer", muted: false, volume: 1 })).toBe("volume");
     expect(stateIcon({ kind: "game", running: false })).toBe(null);
     expect(stateIcon(undefined)).toBe(null);

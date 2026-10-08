@@ -43,9 +43,13 @@ which headphones (`device_icons`), whether sound is muted, and a speaker for the
 
 - A **mute** button (`audio.mute_toggle`) mutes the Windows output, or unmutes it, and shows
   which with its icon (a speaker with sound, or crossed out in red).
+- An **application mute** button (`audio.app_mute_toggle`, needs windows-link 0.1.23 or
+  later) mutes one application, or unmutes it, keeping its volume: the same mute as that
+  application's speaker in the mixer.
 - A **mixer** button (`audio.mixer`) shows the volume and opens the mixer: the whole volume
   on top, then each application that has sound; tap where a slider should be, or slide it.
-  Moving the whole volume unmutes it.
+  The speaker at the left of a row mutes the output or that application alone, as in
+  Windows' volume mixer. Moving a volume unmutes it.
 
 ## Game library
 

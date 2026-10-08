@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { mixerButton, muteButton, startMockLink } from "./mock-link.js";
+import { appMuteButton, mixerButton, muteButton, startMockLink } from "./mock-link.js";
 
 /** @type {Awaited<ReturnType<typeof startMockLink>>} */
 let mock;
@@ -99,4 +99,78 @@ test("without apps playing sound the mixer says so", async ({ page }) => {
   await tile(page, "mixer").click();
   await expect(mixer(page).getByRole("slider")).toHaveCount(1);
   await expect(mixer(page)).toContainText("音を出しているアプリはありません");
+});
+
+test("a row's speaker mutes that app and keeps its volume; a slide unmutes it", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await open(page);
+  await tile(page, "mixer").click();
+  const speaker = mixer(page).getByRole("button", { name: "StreetFighter6のミュート" });
+  await expect(speaker).toHaveAttribute("aria-pressed", "false");
+  // As tall and wide as the close button, for a finger.
+  const size = await speaker.boundingBox();
+  expect(size.width).toBeGreaterThanOrEqual(56);
+  expect(size.height).toBeGreaterThanOrEqual(56);
+
+  await speaker.click();
+  await expect(speaker).toHaveAttribute("aria-pressed", "true");
+  await expect.poll(() => mock.link.mixer.apps[1].muted).toBe(true);
+  expect(mock.link.mixer.apps[1].volume).toBe(0.2);
+  expect(mock.link.mixer.apps[0].muted).toBe(false);
+  // Neither the slider nor the output moved.
+  await expect(mixer(page).getByRole("slider", { name: "StreetFighter6" })).toHaveValue("20");
+  expect(mock.link.mixer.master.muted).toBe(false);
+  await expect(mixer(page).locator(".row").nth(2)).toContainText("ミュート中");
+  await page.screenshot({ path: "test-results/mixer-app-muted.png" });
+
+  await mixer(page).getByRole("slider", { name: "StreetFighter6" }).fill("40");
+  await expect.poll(() => mock.link.mixer.apps[1].muted).toBe(false);
+  await expect(speaker).toHaveAttribute("aria-pressed", "false");
+  await expect(mixer(page).locator(".row").nth(2)).not.toContainText("ミュート中");
+});
+
+test("the whole row's speaker mutes the output, as the mute button does", async ({ page }) => {
+  await open(page);
+  await tile(page, "mixer").click();
+  const speaker = mixer(page).getByRole("button", { name: "全体のミュート" });
+  await speaker.click();
+  await expect(speaker).toHaveAttribute("aria-pressed", "true");
+  await expect.poll(() => mock.link.mixer.master.muted).toBe(true);
+  expect(mock.link.mixer.master.volume).toBe(0.45);
+  await speaker.click();
+  await expect.poll(() => mock.link.mixer.master.muted).toBe(false);
+});
+
+test("an app's mute button mutes it as the mixer's speaker does", async ({ page }) => {
+  mock.link.buttons.push(appMuteButton(mock.link.mixer.apps[1]));
+  await open(page);
+  const button = tile(page, "sf6-mute");
+  await expect(button).toContainText("ミュート");
+  await expect(button.locator("[data-icon]")).toHaveAttribute("data-icon", "sound");
+  await button.click();
+  await expect(button).toContainText("ミュート解除");
+  await expect(button).toContainText("ミュート中");
+  await expect(button.locator("[data-icon]")).toHaveAttribute("data-icon", "muted");
+  expect(mock.link.mixer.apps[1]).toMatchObject({ muted: true, volume: 0.2 });
+  await page.screenshot({ path: "test-results/app-mute.png" });
+
+  // The mixer shows the same mute, and its speaker undoes it on the button too.
+  await tile(page, "mixer").click();
+  const speaker = mixer(page).getByRole("button", { name: "StreetFighter6のミュート" });
+  await expect(speaker).toHaveAttribute("aria-pressed", "true");
+  await speaker.click();
+  await page.keyboard.press("Escape");
+  await expect(button).not.toContainText("ミュート中");
+});
+
+test("an app's mute button says when the app has no sound", async ({ page }) => {
+  mock.link.mixer.apps = mock.link.mixer.apps.filter((a) => a.process !== "StreetFighter6.exe");
+  mock.link.buttons.push(appMuteButton(null));
+  await open(page);
+  const button = tile(page, "sf6-mute");
+  await expect(button).toContainText("起動していません");
+  await button.click();
+  await expect(button).toContainText("対象のアプリが起動していません");
 });
