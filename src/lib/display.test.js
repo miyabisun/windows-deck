@@ -145,6 +145,19 @@ describe("describeState", () => {
     });
   });
 
+  it("offers to hold automation, and says the user is operating while held", () => {
+    expect(describeState({ kind: "hold", held: false })).toEqual({
+      text: "ユーザー操作中にする",
+      note: null,
+      failed: false,
+    });
+    expect(describeState({ kind: "hold", held: true })).toEqual({
+      text: "自動操作を再開",
+      note: "ユーザー操作中",
+      failed: false,
+    });
+  });
+
   it("does not break on a state kind this version does not know", () => {
     expect(describeState({ kind: "future" })).toEqual({
       text: "状態不明",

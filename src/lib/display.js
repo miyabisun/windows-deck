@@ -53,6 +53,10 @@ export function describeState(state) {
         note: state.muted ? "ミュート中" : null,
         failed: false,
       };
+    case "hold":
+      return state.held
+        ? { text: "自動操作を再開", note: "ユーザー操作中", failed: false }
+        : { text: "ユーザー操作中にする", note: null, failed: false };
     case "error":
       return { text: "状態を読めません", note: state.message ?? null, failed: true };
     default:
