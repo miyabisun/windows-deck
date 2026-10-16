@@ -158,6 +158,19 @@ describe("describeState", () => {
     });
   });
 
+  it("offers to make the cursor stand out, and says it does while on", () => {
+    expect(describeState({ kind: "highlight", on: false })).toEqual({
+      text: "目立たせる",
+      note: null,
+      failed: false,
+    });
+    expect(describeState({ kind: "highlight", on: true })).toEqual({
+      text: "元に戻す",
+      note: "目立たせ中",
+      failed: false,
+    });
+  });
+
   it("does not break on a state kind this version does not know", () => {
     expect(describeState({ kind: "future" })).toEqual({
       text: "状態不明",

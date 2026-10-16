@@ -57,6 +57,10 @@ export function describeState(state) {
       return state.held
         ? { text: "自動操作を再開", note: "ユーザー操作中", failed: false }
         : { text: "ユーザー操作中にする", note: null, failed: false };
+    case "highlight":
+      return state.on
+        ? { text: "元に戻す", note: "目立たせ中", failed: false }
+        : { text: "目立たせる", note: null, failed: false };
     case "error":
       return { text: "状態を読めません", note: state.message ?? null, failed: true };
     default:
