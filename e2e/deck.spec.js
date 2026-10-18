@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { startMockLink } from "./mock-link.js";
+import { highlightButton, startMockLink } from "./mock-link.js";
 
 /** @type {Awaited<ReturnType<typeof startMockLink>>} */
 let mock;
@@ -171,4 +171,22 @@ test.describe("on a touch screen", () => {
       await tile(page, "sf6-volume").evaluate((el) => getComputedStyle(el).backgroundColor),
     ).toBe("rgb(44, 44, 44)");
   });
+});
+
+test("the cursor highlight's menu chooses its colour, the chosen one marked", async ({ page }) => {
+  mock.link.buttons = [highlightButton("blue")];
+  await open(page);
+  const cursor = tile(page, "cursor");
+  await expect(cursor).toContainText("目立たせる");
+  await cursor.click({ button: "right" });
+  const menu = page.getByRole("menu", { name: "マウスを目立たせる" });
+  await expect(menu.getByRole("menuitem")).toHaveText(["赤", "青（選択中）", "緑"]);
+  await page.screenshot({ path: "test-results/cursor-colour-menu.png" });
+  await menu.getByRole("menuitem", { name: "赤" }).click();
+  await expect(menu).toHaveCount(0);
+  expect(mock.link.colors).toEqual(["red"]);
+  // A right click chooses, it does not press.
+  expect(mock.link.presses).toEqual([]);
+  await cursor.click({ button: "right" });
+  await expect(menu.getByRole("menuitem")).toHaveText(["赤（選択中）", "青", "緑"]);
 });

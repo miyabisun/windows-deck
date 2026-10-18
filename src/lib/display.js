@@ -4,6 +4,26 @@ import { labelsLockedReason, steamDown } from "./library.js";
 
 const UNKNOWN = { text: "状態不明", note: null, failed: false };
 
+/** The colours a highlighted cursor comes in, as the menu lists them. */
+const COLORS = [
+  { color: "red", name: "赤" },
+  { color: "blue", name: "青" },
+  { color: "green", name: "緑" },
+];
+
+/**
+ * The colours to choose for a highlighted cursor (the `cursor.highlight` button's
+ * menu), the chosen one marked.
+ * @param {any} state the button's state from windows-link
+ * @returns {Array<{ color: string, label: string }>}
+ */
+export function colorMenu(state) {
+  return COLORS.map(({ color, name }) => ({
+    color,
+    label: color === state?.color ? `${name}（選択中）` : name,
+  }));
+}
+
 /**
  * @param {any} state the `state` of a windows-link button
  * @returns {{ text: string, note: string | null, failed: boolean }}
@@ -57,10 +77,16 @@ export function describeState(state) {
       return state.held
         ? { text: "自動操作を再開", note: "ユーザー操作中", failed: false }
         : { text: "ユーザー操作中にする", note: null, failed: false };
-    case "highlight":
+    case "highlight": {
+      const color = COLORS.find((c) => c.color === state.color);
       return state.on
-        ? { text: "元に戻す", note: "目立たせ中", failed: false }
+        ? {
+            text: "元に戻す",
+            note: color ? `目立たせ中（${color.name}）` : "目立たせ中",
+            failed: false,
+          }
         : { text: "目立たせる", note: null, failed: false };
+    }
     case "error":
       return { text: "状態を読めません", note: state.message ?? null, failed: true };
     default:

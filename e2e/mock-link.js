@@ -46,6 +46,17 @@ export const libraryButton = (pins = []) => ({
   state: { kind: "library", pins },
 });
 
+/** A `cursor.highlight` button, off, highlighting in `color`. */
+export const highlightButton = (color = "blue") => ({
+  id: "cursor",
+  type: "cursor.highlight",
+  label: "マウスを目立たせる",
+  desktop: null,
+  except: [],
+  icon: false,
+  state: { kind: "highlight", on: false, color },
+});
+
 /** The default output's volume and the apps with sound, as `GET /audio/mixer` gives them. */
 export const initialMixer = () => ({
   master: { volume: 0.45, muted: false },
@@ -189,6 +200,8 @@ export async function startMockLink() {
     updates: [],
     /** @type {{ status: number, body: any } | null} the next update's answer, else Steam's counts */
     updateAnswer: null,
+    /** @type {string[]} the colours chosen for the cursor highlight, in order */
+    colors: [],
   };
   const sockets = new Set();
   const broadcast = (message) => {
@@ -331,6 +344,15 @@ export async function startMockLink() {
       link.started.push(start[1]);
       res.statusCode = 204;
       return res.end();
+    }
+    if (req.method === "PUT" && req.url === "/buttons/cursor/color" && !link.down) {
+      const { color } = await readJson(req);
+      link.colors.push(color);
+      const index = link.buttons.findIndex((b) => b.id === "cursor");
+      link.buttons[index] = highlightButton(color);
+      broadcast({ type: "button", button: link.buttons[index] });
+      res.setHeader("Content-Type", "application/json");
+      return res.end(JSON.stringify({ button: link.buttons[index] }));
     }
     const pinItem = req.url.match(/^\/buttons\/games\/pins\/([^/]+)$/);
     if ((req.method === "PUT" || req.method === "DELETE") && pinItem && !link.down) {

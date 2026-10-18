@@ -321,6 +321,36 @@ export class Link {
    * Pin a library game to its button's tab, or take it off.
    * @returns {Promise<string | null>} why it failed, if it did
    */
+  /**
+   * Choose the colour a `cursor.highlight` button highlights the cursor in; a failure
+   * stays on the button until its next press or choice.
+   * @param {string} id the button
+   * @param {string} color `red`, `green` or `blue`
+   * @returns {Promise<string | null>} why it did not go through, or null
+   */
+  async setColor(id, color) {
+    delete this.failures[id];
+    try {
+      const response = await this.#env.fetch(
+        `${this.#base}/buttons/${encodeURIComponent(id)}/color`,
+        {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ color }),
+        },
+      );
+      const body = await response.json().catch(() => null);
+      if (response.ok && body?.button) {
+        this.#replace(body.button);
+        return null;
+      }
+      this.failures[id] = pressFailure(response.status, body);
+    } catch {
+      this.failures[id] = pressFailure(null, null);
+    }
+    return this.failures[id];
+  }
+
   async setPinned(id, item, pinned) {
     const key = itemKey(id, item);
     delete this.failures[key];

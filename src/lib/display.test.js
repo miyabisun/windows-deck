@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  colorMenu,
   stateIcon,
   describeState,
   labelFailure,
@@ -158,17 +159,31 @@ describe("describeState", () => {
     });
   });
 
-  it("offers to make the cursor stand out, and says it does while on", () => {
-    expect(describeState({ kind: "highlight", on: false })).toEqual({
+  it("offers to make the cursor stand out, and says in which colour while on", () => {
+    expect(describeState({ kind: "highlight", on: false, color: "blue" })).toEqual({
       text: "目立たせる",
       note: null,
       failed: false,
     });
+    expect(describeState({ kind: "highlight", on: true, color: "red" })).toEqual({
+      text: "元に戻す",
+      note: "目立たせ中（赤）",
+      failed: false,
+    });
+    // An older windows-link tells no colour.
     expect(describeState({ kind: "highlight", on: true })).toEqual({
       text: "元に戻す",
       note: "目立たせ中",
       failed: false,
     });
+  });
+
+  it("lists the cursor's colours to choose, the chosen one marked", () => {
+    expect(colorMenu({ kind: "highlight", on: false, color: "blue" })).toEqual([
+      { color: "red", label: "赤" },
+      { color: "blue", label: "青（選択中）" },
+      { color: "green", label: "緑" },
+    ]);
   });
 
   it("does not break on a state kind this version does not know", () => {

@@ -9,7 +9,7 @@
   import Spinner from "./lib/Spinner.svelte";
   import Tile from "./lib/Tile.svelte";
   import Toast, { Notice } from "./lib/Toast.svelte";
-  import { stateIcon } from "./lib/display.js";
+  import { colorMenu, stateIcon } from "./lib/display.js";
   import { pictureUrl, pinsOf } from "./lib/library.js";
   import { Link, itemKey } from "./lib/link.svelte.js";
   import { buttonsFor } from "./lib/tabs.js";
@@ -38,6 +38,8 @@
   let pinChoice = $state(null);
   /** @type {{ button: string, label: string, x: number, y: number } | null} the library button whose menu is open */
   let libraryMenu = $state(null);
+  /** @type {{ button: string, label: string, state: any, x: number, y: number } | null} the cursor highlight whose colours are open */
+  let colorChoice = $state(null);
   /** what the last library update started, shown for a few seconds */
   const notice = new Notice();
 
@@ -160,7 +162,15 @@
           }}
           onlong={button.state?.kind === "library"
             ? (point) => (libraryMenu = { button: button.id, label: button.label, ...point })
-            : null}
+            : button.state?.kind === "highlight"
+              ? (point) =>
+                  (colorChoice = {
+                    button: button.id,
+                    label: button.label,
+                    state: button.state,
+                    ...point,
+                  })
+              : null}
         />
       {/each}
       {#each pins as { button, pin, whole } (itemKey(button, pin.id))}
@@ -204,6 +214,19 @@
     title={libraryMenu.label}
     items={[{ label: "ライブラリを更新", onselect: () => updateLibrary(libraryMenu.button) }]}
     onclose={() => (libraryMenu = null)}
+  />
+{/if}
+
+{#if link && colorChoice}
+  <ContextMenu
+    x={colorChoice.x}
+    y={colorChoice.y}
+    title={colorChoice.label}
+    items={colorMenu(colorChoice.state).map(({ color, label }) => ({
+      label,
+      onselect: () => link.setColor(colorChoice.button, color),
+    }))}
+    onclose={() => (colorChoice = null)}
   />
 {/if}
 

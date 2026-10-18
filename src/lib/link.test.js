@@ -452,6 +452,32 @@ describe("Link libraries", () => {
     expect(await unpinned).toBe("ライブラリにこのゲームがありません（一覧を開き直してください）");
   });
 
+  it("chooses the highlighted cursor's colour and takes the button's new state", async () => {
+    const cursor = (color) => ({
+      id: "cursor",
+      type: "cursor.highlight",
+      label: "マウスを目立たせる",
+      state: { kind: "highlight", on: false, color },
+    });
+    t.socket().send({ type: "snapshot", buttons: [cursor("blue")], desktops: [] });
+    const chosen = t.link.setColor("cursor", "red");
+    expect(t.requests[0].url).toBe("http://127.0.0.1:4730/buttons/cursor/color");
+    expect(t.requests[0].init.method).toBe("PUT");
+    expect(JSON.parse(t.requests[0].init.body)).toEqual({ color: "red" });
+    t.reply(200, { button: cursor("red") });
+    expect(await chosen).toBeNull();
+    expect(t.link.buttons[0].state.color).toBe("red");
+
+    const failed = t.link.setColor("cursor", "green");
+    t.reply(404, { error: "not_found", message: "unknown button" });
+    expect(await failed).toBe(
+      "windows-link にこのボタンがありません（設定が変わった可能性があります）",
+    );
+    expect(t.link.failures.cursor).toBe(
+      "windows-link にこのボタンがありません（設定が変わった可能性があります）",
+    );
+  });
+
   it("opens a game's folder", async () => {
     const opened = t.link.openFolder("games", "1364780");
     expect(t.requests[0].url).toBe("http://127.0.0.1:4730/buttons/games/library/1364780/folder");
