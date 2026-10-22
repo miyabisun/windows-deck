@@ -34,6 +34,8 @@ pub fn wait_for_exit(pid: u32) {
         System::Threading::{OpenProcess, PROCESS_SYNCHRONIZE, WaitForSingleObject},
     };
     let timeout = u32::try_from(Duration::from_secs(15).as_millis()).unwrap_or(u32::MAX);
+    // SAFETY: the process handle is used only when `OpenProcess` returned one and is closed exactly
+    // once after the wait.
     unsafe {
         let process = OpenProcess(PROCESS_SYNCHRONIZE, 0, pid);
         if !process.is_null() {
@@ -46,6 +48,7 @@ pub fn wait_for_exit(pid: u32) {
 /// Reattach to the launching terminal so `--version` is visible in the release build.
 pub fn attach_console() {
     if !cfg!(debug_assertions) {
+        // SAFETY: AttachConsole only takes the predefined parent-process id.
         unsafe {
             windows_sys::Win32::System::Console::AttachConsole(
                 windows_sys::Win32::System::Console::ATTACH_PARENT_PROCESS,
