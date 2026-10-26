@@ -199,7 +199,8 @@ The installed panel checks the latest GitHub release when it starts and every ho
 the release is newer than itself it updates without asking, the same way windows-link
 does:
 
-1. downloads the exe and its `.sha256` file over HTTPS and checks the SHA-256,
+1. downloads the exe and its `.sha256` file over HTTPS from `releases/download/<tag>/`
+   and checks the SHA-256,
 2. saves it as `windows-deck.exe.new` and checks that it runs and reports the release's
    version,
 3. renames the running exe to `windows-deck.exe.old` (Windows allows renaming a running
@@ -216,8 +217,13 @@ Debug builds and copies run from anywhere other than
 To check right away instead of waiting for the hour, run
 `%LOCALAPPDATA%\Programs\windows-deck\windows-deck.exe --check-update` while the panel is
 running; the running panel does the check (see the log for the result).
-`WINDOWS_DECK_UPDATE_URL` points the panel at another release feed in the GitHub API
-format (plain HTTP only for `127.0.0.1`, `localhost` and `[::1]`, for testing).
+The latest release's tag is read from where
+`https://github.com/miyabisun/windows-deck/releases/latest` redirects to, not from GitHub's
+API, whose 60 calls an hour without a token every machine at home shares.
+`WINDOWS_DECK_UPDATE_URL` points the panel at another repository laid out the same way
+(`/releases/latest` redirecting to `/releases/tag/vX.Y.Z`, the files under
+`/releases/download/vX.Y.Z/`; plain HTTP only for `127.0.0.1`, `localhost` and `[::1]`, for
+testing).
 
 Releases are built by GitHub Actions when a `vX.Y.Z` tag is pushed
 (`.github/workflows/release.yml`); the tag must match the version in `package.json`. The
