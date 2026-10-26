@@ -138,6 +138,24 @@ export function pressFailure(status, body) {
 }
 
 /**
+ * Why resting or waking did not go through: the panel's monitor unknown (`no_monitor`,
+ * from the panel itself), or windows-link refusing or failing.
+ * @param {number | null} status HTTP status, or null without an answer from windows-link
+ * @param {any} body the JSON error body, if any
+ */
+export function restFailure(status, body) {
+  switch (body?.error) {
+    case "no_monitor":
+      return "deck のモニターが分からないため休止できません（設定の monitor を確かめてください）";
+    case "not_found":
+      return "deck のモニターが windows-link に見つかりません";
+    case "unrestored":
+      return `明るさを戻せなかったモニターがあります。もう一度押すと再試行します（${body.message}）`;
+  }
+  return pressFailure(status, body);
+}
+
+/**
  * Why signing in to a shop did not go through: the login window (status null with
  * `closed`, or `not_panel` outside the panel's app), or windows-link refusing it.
  * @param {number | null} status HTTP status, or null without an answer from windows-link

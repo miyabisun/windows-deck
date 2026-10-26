@@ -2,7 +2,7 @@
   import Icon from "./Icon.svelte";
   import Spinner from "./Spinner.svelte";
 
-  /** @type {{ desktops: Array<{ id: string, name: string, index: number, current: boolean }>, unmatched?: string[], switching?: string | null, failure?: string | null, disabled?: boolean, onswitch: (id: string) => void, oncreate: (name: string) => void, onsleep: () => void }} */
+  /** @type {{ desktops: Array<{ id: string, name: string, index: number, current: boolean }>, unmatched?: string[], switching?: string | null, failure?: string | null, disabled?: boolean, onswitch: (id: string) => void, oncreate: (name: string) => void, onrest: () => void }} */
   let {
     desktops,
     unmatched = [],
@@ -11,7 +11,7 @@
     disabled = false,
     onswitch,
     oncreate,
-    onsleep,
+    onrest,
   } = $props();
 
   const ordered = $derived([...desktops].sort((a, b) => a.index - b.index));
@@ -92,10 +92,10 @@
     <button
       type="button"
       class="action"
-      aria-label="スリープ"
+      aria-label="休止"
       aria-disabled={disabled}
       onclick={() => {
-        if (!disabled) onsleep();
+        if (!disabled) onrest();
       }}
     >
       <Icon name="moon" />

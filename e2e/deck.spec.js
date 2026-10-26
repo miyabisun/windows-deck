@@ -109,11 +109,11 @@ test("works from the keyboard", async ({ page }) => {
   mock.link.desktops = [];
   await open(page);
   await expect(page.locator(".tile")).toHaveCount(2);
-  // The tab bar comes first: create a desktop, then sleep, then the buttons.
+  // The tab bar comes first: create a desktop, then rest, then the buttons.
   await page.keyboard.press("Tab");
   await expect(page.getByRole("button", { name: "デスクトップを作る" })).toBeFocused();
   await page.keyboard.press("Tab");
-  await expect(page.getByRole("button", { name: "スリープ" })).toBeFocused();
+  await expect(page.getByRole("button", { name: "休止" })).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(tile(page, "output")).toBeFocused();
   const ring = await tile(page, "output").evaluate((el) => getComputedStyle(el).outlineWidth);

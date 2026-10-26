@@ -32,7 +32,12 @@ At the right end of the tab row:
 
 - **+** lists the desktop files that have no desktop (for example after the desktop was
   renamed or removed in Windows); picking one creates that desktop and switches to it.
-- **Moon** puts the PC to sleep right away.
+- **Moon** rests the PC right away instead of putting it to sleep: windows-link darkens every
+  monitor but the panel's (brightness 0 over DDC/CI and a black window over each), and the
+  panel turns dim and grey with a single wake button. Waking puts each monitor's brightness
+  back. Nothing is unplugged, so none of the USB devices chime as they do after sleep. The
+  panel's monitor is the one set as `monitor` in its configuration; see windows-link's
+  "Resting" section.
 
 Buttons with an icon in windows-link (an exe's or a shortcut's Windows icon, or a picture on
 the web such as DLsite's favicon) show it next to their label. Other buttons show an icon of

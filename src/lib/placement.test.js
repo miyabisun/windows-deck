@@ -10,10 +10,22 @@ const monitors = [
 ];
 
 describe("placement", () => {
-  it("fills the configured monitor, found by id, name or display name, ignoring case", () => {
-    expect(placement(monitors, "mon-1")).toEqual({ kind: "fill", display: display(1) });
-    expect(placement(monitors, "t10fa")).toEqual({ kind: "fill", display: display(2) });
-    expect(placement(monitors, "\\\\.\\display3")).toEqual({ kind: "fill", display: display(3) });
+  it("fills the configured monitor, found by id, name or display name, ignoring case, and names its id", () => {
+    expect(placement(monitors, "mon-1")).toEqual({
+      kind: "fill",
+      display: display(1),
+      id: "mon-1",
+    });
+    expect(placement(monitors, "t10fa")).toEqual({
+      kind: "fill",
+      display: display(2),
+      id: "mon-2",
+    });
+    expect(placement(monitors, "\\\\.\\display3")).toEqual({
+      kind: "fill",
+      display: display(3),
+      id: "mon-3",
+    });
   });
 
   it("waits, rather than using another monitor, while the configured one is not there", () => {

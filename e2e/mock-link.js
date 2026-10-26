@@ -184,7 +184,16 @@ export async function startMockLink() {
     desktopsError: null,
     /** @type {string[]} desktop files without a desktop */
     unmatched: [],
-    sleeps: 0,
+    monitors: [
+      { id: "mon-main", name: "25M2S", gdi_name: "DISPLAY1", primary: true, touch: false },
+      { id: "mon-panel", name: "T10FA", gdi_name: "DISPLAY5", primary: false, touch: true },
+    ],
+    resting: false,
+    /** @type {string[]} the monitors kept lit by each rest */
+    rests: [],
+    wakes: 0,
+    /** @type {{ status: number, body: any } | null} the next wake's answer, else it wakes */
+    wakeAnswer: null,
     /** @type {string[]} */
     switches: [],
     /** @type {string[]} */
@@ -255,11 +264,33 @@ export async function startMockLink() {
         JSON.stringify({ desktops: link.desktops, unmatched: link.unmatched, error: null }),
       );
     }
-    if (req.method === "POST" && req.url === "/power/sleep") {
-      link.sleeps += 1;
-      res.statusCode = 202;
+    if (req.method === "GET" && req.url === "/touch-monitors") {
       res.setHeader("Content-Type", "application/json");
-      return res.end(JSON.stringify({ sleeping: true }));
+      return res.end(JSON.stringify(link.monitors));
+    }
+    if (req.method === "GET" && req.url === "/power") {
+      res.setHeader("Content-Type", "application/json");
+      return res.end(JSON.stringify({ resting: link.resting }));
+    }
+    if (req.method === "POST" && req.url === "/power/rest" && !link.down) {
+      const { keep } = await readJson(req);
+      link.rests.push(keep);
+      res.setHeader("Content-Type", "application/json");
+      if (!link.monitors.some((m) => m.id === keep)) {
+        res.statusCode = 404;
+        return res.end(JSON.stringify({ error: "not_found", message: "no connected monitor" }));
+      }
+      link.resting = true;
+      return res.end(JSON.stringify({ resting: true }));
+    }
+    if (req.method === "POST" && req.url === "/power/wake" && !link.down) {
+      link.wakes += 1;
+      const { status, body } = link.wakeAnswer ?? { status: 200, body: { resting: false } };
+      link.wakeAnswer = null;
+      if (status < 400) link.resting = false;
+      res.statusCode = status;
+      res.setHeader("Content-Type", "application/json");
+      return res.end(JSON.stringify(body));
     }
     if (req.method === "GET" && req.url.startsWith("/dlsite-art/")) {
       res.setHeader("Content-Type", "image/svg+xml");

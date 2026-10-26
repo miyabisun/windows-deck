@@ -6,6 +6,7 @@
   import LibraryModal from "./lib/LibraryModal.svelte";
   import MixerModal from "./lib/MixerModal.svelte";
   import ProgramChooser from "./lib/ProgramChooser.svelte";
+  import RestCover from "./lib/RestCover.svelte";
   import Spinner from "./lib/Spinner.svelte";
   import Tile from "./lib/Tile.svelte";
   import Toast, { Notice } from "./lib/Toast.svelte";
@@ -18,6 +19,8 @@
   /** @type {Link | null} */
   let link = $state(null);
   let configError = $state(null);
+  /** @type {string | null} the configured monitor, kept lit while resting */
+  let monitor = null;
   /** Whether the window has been placed and shown, so it can be pinned. */
   let shown = $state(false);
   /** @type {number | null} */
@@ -62,6 +65,7 @@
     let started = null;
     loadConfig().then(async (config) => {
       configError = config.error;
+      monitor = config.monitor;
       started = new Link(config.link);
       link = started;
       started.start();
@@ -81,170 +85,189 @@
   $effect(() => {
     if (link?.pinRound && shown && hwnd !== null) link.pin(hwnd);
   });
+
+  // windows-link may have been resting before this connection (the panel reloaded).
+  $effect(() => {
+    if (link?.pinRound) link.syncRest();
+  });
 </script>
 
-{#if link}
-  <DesktopTabs
-    desktops={link.desktops}
-    unmatched={link.unmatched}
-    switching={link.switching}
-    failure={link.desktopFailure}
-    disabled={link.status !== "connected"}
-    onswitch={(id) => link.switchDesktop(id)}
-    oncreate={(name) => link.createDesktop(name)}
-    onsleep={() => link.sleep()}
-  />
-{/if}
-
-<main class="deck">
-  {#if configError}
-    <p class="banner" role="alert">
-      設定ファイルを読めないため、既定の設定で動いています: {configError}
-    </p>
+<div class="app" inert={!!link?.resting}>
+  {#if link}
+    <DesktopTabs
+      desktops={link.desktops}
+      unmatched={link.unmatched}
+      switching={link.switching}
+      failure={link.desktopFailure ?? (link.resting ? null : link.restFailure)}
+      disabled={link.status !== "connected"}
+      onswitch={(id) => link.switchDesktop(id)}
+      oncreate={(name) => link.createDesktop(name)}
+      onrest={() => link.rest(monitor)}
+    />
   {/if}
-  {#if setup}
-    <div class="banner setup" role="alert">
-      <p>
-        表示するモニターが設定されていません。{setup.path || "設定ファイル"} に
-        <code>monitor: モニターのID</code> を書いて、再読み込みしてください。
+
+  <main class="deck">
+    {#if configError}
+      <p class="banner" role="alert">
+        設定ファイルを読めないため、既定の設定で動いています: {configError}
       </p>
-      {#if setup.candidates.length > 0}
-        <ul>
-          {#each setup.candidates as candidate (candidate.id)}
-            <li>
-              <code>{candidate.id}</code>
-              {candidate.name.trim()}{candidate.primary ? "（メイン）" : ""}{candidate.touch
-                ? "（タッチ）"
-                : ""}
-            </li>
-          {/each}
-        </ul>
-      {/if}
-      <button type="button" class="reload" onclick={() => location.reload()}>再読み込み</button>
-    </div>
-  {/if}
-  {#if link?.status === "disconnected"}
-    <p class="banner" role="status">
-      windows-link（{link.base}）に接続できません。再接続しています…
-    </p>
-  {/if}
-
-  {#if !link || (link.status === "connecting" && link.buttons.length === 0)}
-    <p class="quiet" role="status"><Spinner /> windows-link に接続しています…</p>
-  {:else if link.status === "connected" && link.buttons.length === 0}
-    <div class="quiet">
-      <p>ボタンがありません。</p>
-      <p>
-        windows-link
-        の設定ファイル（%LOCALAPPDATA%\windows-link\config.yaml）にボタンを追加し、windows-link
-        を再起動してください。
+    {/if}
+    {#if setup}
+      <div class="banner setup" role="alert">
+        <p>
+          表示するモニターが設定されていません。{setup.path || "設定ファイル"} に
+          <code>monitor: モニターのID</code> を書いて、再読み込みしてください。
+        </p>
+        {#if setup.candidates.length > 0}
+          <ul>
+            {#each setup.candidates as candidate (candidate.id)}
+              <li>
+                <code>{candidate.id}</code>
+                {candidate.name.trim()}{candidate.primary ? "（メイン）" : ""}{candidate.touch
+                  ? "（タッチ）"
+                  : ""}
+              </li>
+            {/each}
+          </ul>
+        {/if}
+        <button type="button" class="reload" onclick={() => location.reload()}>再読み込み</button>
+      </div>
+    {/if}
+    {#if link?.status === "disconnected"}
+      <p class="banner" role="status">
+        windows-link（{link.base}）に接続できません。再接続しています…
       </p>
-    </div>
-  {:else if visible.length === 0}
-    <p class="quiet">このデスクトップに割り当てたボタンはありません。</p>
-  {:else}
-    <div class="grid">
-      {#each visible as button (button.id)}
-        <Tile
-          {button}
-          icon={button.icon ? `${link.base}/buttons/${encodeURIComponent(button.id)}/icon` : null}
-          glyph={stateIcon(button.state)}
-          pending={!!link.pending[button.id]}
-          failure={link.failures[button.id]}
-          disabled={link.status !== "connected"}
-          onpress={() => {
-            if (button.state?.kind === "library") {
-              // Opening the library is the next press, which clears a failed update.
-              delete link.failures[button.id];
-              opened = button.id;
-            } else if (button.state?.kind === "mixer") mixing = true;
-            else link.press(button.id);
-          }}
-          onlong={button.state?.kind === "library"
-            ? (point) => (libraryMenu = { button: button.id, label: button.label, ...point })
-            : button.state?.kind === "highlight"
-              ? (point) =>
-                  (colorChoice = {
-                    button: button.id,
-                    label: button.label,
-                    state: button.state,
-                    ...point,
-                  })
-              : null}
-        />
-      {/each}
-      {#each pins as { button, pin, whole } (itemKey(button, pin.id))}
-        <Tile
-          button={{ id: itemKey(button, pin.id), label: pin.name }}
-          cover={pictureUrl(link.base, button, pin.id)}
-          {whole}
-          pending={!!link.pending[itemKey(button, pin.id)]}
-          failure={link.failures[itemKey(button, pin.id)]}
-          disabled={link.status !== "connected"}
-          onpress={() => startPin(button, pin)}
-          onlong={(point) => (pinMenu = { button, pin, ...point })}
-        />
-      {/each}
-    </div>
+    {/if}
+
+    {#if !link || (link.status === "connecting" && link.buttons.length === 0)}
+      <p class="quiet" role="status"><Spinner /> windows-link に接続しています…</p>
+    {:else if link.status === "connected" && link.buttons.length === 0}
+      <div class="quiet">
+        <p>ボタンがありません。</p>
+        <p>
+          windows-link
+          の設定ファイル（%LOCALAPPDATA%\windows-link\config.yaml）にボタンを追加し、windows-link
+          を再起動してください。
+        </p>
+      </div>
+    {:else if visible.length === 0}
+      <p class="quiet">このデスクトップに割り当てたボタンはありません。</p>
+    {:else}
+      <div class="grid">
+        {#each visible as button (button.id)}
+          <Tile
+            {button}
+            icon={button.icon ? `${link.base}/buttons/${encodeURIComponent(button.id)}/icon` : null}
+            glyph={stateIcon(button.state)}
+            pending={!!link.pending[button.id]}
+            failure={link.failures[button.id]}
+            disabled={link.status !== "connected"}
+            onpress={() => {
+              if (button.state?.kind === "library") {
+                // Opening the library is the next press, which clears a failed update.
+                delete link.failures[button.id];
+                opened = button.id;
+              } else if (button.state?.kind === "mixer") mixing = true;
+              else link.press(button.id);
+            }}
+            onlong={button.state?.kind === "library"
+              ? (point) => (libraryMenu = { button: button.id, label: button.label, ...point })
+              : button.state?.kind === "highlight"
+                ? (point) =>
+                    (colorChoice = {
+                      button: button.id,
+                      label: button.label,
+                      state: button.state,
+                      ...point,
+                    })
+                : null}
+          />
+        {/each}
+        {#each pins as { button, pin, whole } (itemKey(button, pin.id))}
+          <Tile
+            button={{ id: itemKey(button, pin.id), label: pin.name }}
+            cover={pictureUrl(link.base, button, pin.id)}
+            {whole}
+            pending={!!link.pending[itemKey(button, pin.id)]}
+            failure={link.failures[itemKey(button, pin.id)]}
+            disabled={link.status !== "connected"}
+            onpress={() => startPin(button, pin)}
+            onlong={(point) => (pinMenu = { button, pin, ...point })}
+          />
+        {/each}
+      </div>
+    {/if}
+  </main>
+
+  {#if link && openedButton}
+    <LibraryModal {link} button={openedButton} onclose={() => (opened = null)} />
   {/if}
-</main>
 
-{#if link && openedButton}
-  <LibraryModal {link} button={openedButton} onclose={() => (opened = null)} />
-{/if}
+  {#if link && mixing}
+    <MixerModal {link} onclose={() => (mixing = false)} />
+  {/if}
 
-{#if link && mixing}
-  <MixerModal {link} onclose={() => (mixing = false)} />
-{/if}
+  {#if link && pinChoice}
+    <ProgramChooser
+      {link}
+      button={pinChoice.button}
+      item={pinChoice.pin}
+      start
+      onclose={() => (pinChoice = null)}
+    />
+  {/if}
 
-{#if link && pinChoice}
-  <ProgramChooser
-    {link}
-    button={pinChoice.button}
-    item={pinChoice.pin}
-    start
-    onclose={() => (pinChoice = null)}
-  />
-{/if}
+  {#if link && libraryMenu}
+    <ContextMenu
+      x={libraryMenu.x}
+      y={libraryMenu.y}
+      title={libraryMenu.label}
+      items={[{ label: "ライブラリを更新", onselect: () => updateLibrary(libraryMenu.button) }]}
+      onclose={() => (libraryMenu = null)}
+    />
+  {/if}
 
-{#if link && libraryMenu}
-  <ContextMenu
-    x={libraryMenu.x}
-    y={libraryMenu.y}
-    title={libraryMenu.label}
-    items={[{ label: "ライブラリを更新", onselect: () => updateLibrary(libraryMenu.button) }]}
-    onclose={() => (libraryMenu = null)}
-  />
-{/if}
+  {#if link && colorChoice}
+    <ContextMenu
+      x={colorChoice.x}
+      y={colorChoice.y}
+      title={colorChoice.label}
+      items={colorMenu(colorChoice.state).map(({ color, label }) => ({
+        label,
+        onselect: () => link.setColor(colorChoice.button, color),
+      }))}
+      onclose={() => (colorChoice = null)}
+    />
+  {/if}
 
-{#if link && colorChoice}
-  <ContextMenu
-    x={colorChoice.x}
-    y={colorChoice.y}
-    title={colorChoice.label}
-    items={colorMenu(colorChoice.state).map(({ color, label }) => ({
-      label,
-      onselect: () => link.setColor(colorChoice.button, color),
-    }))}
-    onclose={() => (colorChoice = null)}
-  />
-{/if}
+  <Toast {notice} fixed />
 
-<Toast {notice} fixed />
+  {#if link && pinMenu}
+    <GameMenu
+      {link}
+      button={pinMenu.button}
+      item={pinMenu.pin}
+      pinned
+      x={pinMenu.x}
+      y={pinMenu.y}
+      onclose={() => (pinMenu = null)}
+    />
+  {/if}
+</div>
 
-{#if link && pinMenu}
-  <GameMenu
-    {link}
-    button={pinMenu.button}
-    item={pinMenu.pin}
-    pinned
-    x={pinMenu.x}
-    y={pinMenu.y}
-    onclose={() => (pinMenu = null)}
+{#if link?.resting}
+  <RestCover
+    pending={link.restPending === "wake"}
+    failure={link.restFailure}
+    onwake={() => link.wake()}
   />
 {/if}
 
 <style lang="sass">
+  // Only groups the panel, to make it inert while resting.
+  .app
+    display: contents
+
   .deck
     display: flex
     flex-direction: column

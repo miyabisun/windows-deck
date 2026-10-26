@@ -246,7 +246,7 @@ describe("Link desktops", () => {
   });
 });
 
-describe("Link desktop files and sleep", () => {
+describe("Link desktop files and the mixer", () => {
   let t;
   beforeEach(() => {
     t = setup();
@@ -299,14 +299,87 @@ describe("Link desktop files and sleep", () => {
       failure: "このアプリは今は音を出していません（ミキサーを開き直してください）",
     });
   });
+});
 
-  it("asks windows-link to put the PC to sleep", async () => {
+describe("Link resting", () => {
+  let t;
+  const monitors = [
+    { id: "mon-main", name: "25M2S", gdi_name: "DISPLAY1", primary: true, touch: false },
+    { id: "mon-panel", name: "T10FA", gdi_name: "DISPLAY5", primary: false, touch: true },
+  ];
+  beforeEach(() => {
+    t = setup();
+    t.link.start();
+    t.socket().open();
     t.socket().send({ type: "snapshot", buttons: [], desktops: [] });
-    const slept = t.link.sleep();
-    expect(t.requests[0].url).toBe("http://127.0.0.1:4730/power/sleep");
+  });
+
+  it("reads whether windows-link is resting", async () => {
+    const synced = t.link.syncRest();
+    expect(t.requests[0].url).toBe("http://127.0.0.1:4730/power");
+    t.reply(200, { resting: true });
+    await synced;
+    expect(t.link.resting).toBe(true);
+  });
+
+  it("rests keeping the configured monitor lit", async () => {
+    const rested = t.link.rest("T10FA");
+    expect(t.requests[0].url).toBe("http://127.0.0.1:4730/touch-monitors");
+    t.reply(200, monitors);
+    await settle();
+    expect(t.requests[1].url).toBe("http://127.0.0.1:4730/power/rest");
+    expect(t.requests[1].init.method).toBe("POST");
+    expect(JSON.parse(t.requests[1].init.body)).toEqual({ keep: "mon-panel" });
+    t.reply(200, { resting: true });
+    await rested;
+    expect(t.link.resting).toBe(true);
+    expect(t.link.restFailure).toBe(null);
+  });
+
+  it("does not rest without knowing the panel's monitor, and says why", async () => {
+    const rested = t.link.rest(null);
+    t.reply(200, monitors);
+    await rested;
+    expect(t.requests).toHaveLength(1);
+    expect(t.link.resting).toBe(false);
+    expect(t.link.restFailure).toContain("deck のモニターが分からない");
+  });
+
+  it("says why windows-link would not rest", async () => {
+    const rested = t.link.rest("mon-panel");
+    t.reply(200, monitors);
+    await settle();
+    t.reply(404, { error: "not_found", message: "no connected monitor with this id" });
+    await rested;
+    expect(t.link.resting).toBe(false);
+    expect(t.link.restFailure).toBe("deck のモニターが windows-link に見つかりません");
+  });
+
+  it("wakes, and stays resting with the cause when the brightness cannot be put back", async () => {
+    t.link.resting = true;
+    let woke = t.link.wake();
+    expect(t.requests[0].url).toBe("http://127.0.0.1:4730/power/wake");
     expect(t.requests[0].init.method).toBe("POST");
-    t.reply(202, { sleeping: true });
-    expect(await slept).toBe(true);
+    t.reply(409, { error: "unrestored", message: "cannot put the brightness back on 25M2S" });
+    await woke;
+    expect(t.link.resting).toBe(true);
+    expect(t.link.restFailure).toContain("もう一度押すと再試行します");
+    woke = t.link.wake();
+    t.reply(200, { resting: false });
+    await woke;
+    expect(t.link.resting).toBe(false);
+    expect(t.link.restFailure).toBe(null);
+  });
+
+  it("ignores a second press while resting or waking is under way", async () => {
+    t.link.resting = true;
+    const woke = t.link.wake();
+    t.link.wake();
+    expect(t.requests).toHaveLength(1);
+    t.fail();
+    await woke;
+    expect(t.link.restFailure).toBe("windows-link に届きませんでした");
+    expect(t.link.resting).toBe(true);
   });
 });
 

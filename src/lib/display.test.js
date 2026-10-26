@@ -8,6 +8,7 @@ import {
   mixerFailure,
   libraryFailure,
   pressFailure,
+  restFailure,
   signInFailure,
   switchFailure,
   updateFailure,
@@ -384,5 +385,28 @@ describe("labelFailure", () => {
       "ラベルかゲームが見つかりません（一覧を開き直してください）",
     );
     expect(labelFailure(null, null)).toBe("windows-link に届きませんでした");
+  });
+});
+
+describe("restFailure", () => {
+  it("says why resting or waking did not go through", () => {
+    expect(restFailure(null, null)).toBe("windows-link に届きませんでした");
+    expect(restFailure(null, { error: "no_monitor" })).toBe(
+      "deck のモニターが分からないため休止できません（設定の monitor を確かめてください）",
+    );
+    expect(restFailure(404, { error: "not_found" })).toBe(
+      "deck のモニターが windows-link に見つかりません",
+    );
+    expect(
+      restFailure(409, {
+        error: "unrestored",
+        message: "cannot put the brightness back on 25M2S; wake again to retry",
+      }),
+    ).toBe(
+      "明るさを戻せなかったモニターがあります。もう一度押すと再試行します（cannot put the brightness back on 25M2S; wake again to retry）",
+    );
+    expect(restFailure(500, { error: "rest", message: "store" })).toBe(
+      "Windows の操作に失敗しました: store",
+    );
   });
 });

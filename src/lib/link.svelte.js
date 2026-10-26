@@ -7,11 +7,13 @@ import {
   labelFailure,
   libraryFailure,
   pressFailure,
+  restFailure,
   signInFailure,
   switchFailure,
   updateFailure,
   updateResult,
 } from "./display.js";
+import { placement } from "./placement.js";
 import { shopLogin } from "./window.js";
 
 /** The `pending` and `failures` key of a library game. */
@@ -44,6 +46,12 @@ export class Link {
    * may have restarted) and when windows-link reconnects to Explorer, which forgets pins.
    */
   pinRound = $state(0);
+  /** Whether windows-link has darkened every monitor but the panel's. */
+  resting = $state(false);
+  /** @type {"rest" | "wake" | null} what the panel asked windows-link and awaits */
+  restPending = $state(null);
+  /** @type {string | null} why resting or waking did not go through */
+  restFailure = $state(null);
 
   #base;
   #env;
@@ -514,16 +522,61 @@ export class Link {
     }
   }
 
-  /**
-   * Put the PC to sleep.
-   * @returns {Promise<boolean>} whether windows-link accepted
-   */
-  async sleep() {
+  /** Read whether windows-link is resting; it may have been before this connection. */
+  async syncRest() {
     try {
-      const response = await this.#env.fetch(`${this.#base}/power/sleep`, { method: "POST" });
-      return response.ok;
+      const response = await this.#env.fetch(`${this.#base}/power`);
+      const body = await response.json().catch(() => null);
+      if (response.ok && typeof body?.resting === "boolean") this.resting = body.resting;
     } catch {
-      return false;
+      // The next connection reads it again.
+    }
+  }
+
+  /**
+   * Darken every monitor but the panel's: `monitor` as configured (id, name or display
+   * name, as for placing the window).
+   */
+  async rest(monitor) {
+    if (this.restPending || this.status !== "connected") return;
+    this.restPending = "rest";
+    this.restFailure = null;
+    try {
+      const listed = await this.#env.fetch(`${this.#base}/touch-monitors`);
+      const choice = placement(listed.ok ? await listed.json() : null, monitor);
+      if (choice.kind !== "fill") {
+        this.restFailure = restFailure(null, { error: "no_monitor" });
+        return;
+      }
+      const response = await this.#env.fetch(`${this.#base}/power/rest`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ keep: choice.id }),
+      });
+      const body = await response.json().catch(() => null);
+      if (response.ok) this.resting = true;
+      else this.restFailure = restFailure(response.status, body);
+    } catch {
+      this.restFailure = restFailure(null, null);
+    } finally {
+      this.restPending = null;
+    }
+  }
+
+  /** Light the monitors again. A failure keeps the panel resting, to press again. */
+  async wake() {
+    if (this.restPending) return;
+    this.restPending = "wake";
+    this.restFailure = null;
+    try {
+      const response = await this.#env.fetch(`${this.#base}/power/wake`, { method: "POST" });
+      const body = await response.json().catch(() => null);
+      if (response.ok) this.resting = false;
+      else this.restFailure = restFailure(response.status, body);
+    } catch {
+      this.restFailure = restFailure(null, null);
+    } finally {
+      this.restPending = null;
     }
   }
 }

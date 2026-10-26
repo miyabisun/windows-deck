@@ -2,7 +2,7 @@
 
 /**
  * @typedef {{ id: string, name: string, gdi_name: string, primary: boolean, touch: boolean }} Monitor
- * @typedef {{ kind: "fill", display: string }
+ * @typedef {{ kind: "fill", display: string, id: string }
  *   | { kind: "wait", reason: string }
  *   | { kind: "setup", candidates: Monitor[] }} Placement
  */
@@ -23,5 +23,5 @@ export function placement(monitors, preference) {
     [m.id, m.name, m.gdi_name].some((value) => value?.trim().toLowerCase() === wanted),
   );
   if (!match) return { kind: "wait", reason: `monitor ${preference} is not connected` };
-  return { kind: "fill", display: match.gdi_name };
+  return { kind: "fill", display: match.gdi_name, id: match.id };
 }

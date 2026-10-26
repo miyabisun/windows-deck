@@ -3,6 +3,7 @@
   export const ICONS = {
     plus: "M12 5v14M5 12h14",
     moon: "M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5z",
+    sun: "M12 8a4 4 0 1 0 0 8a4 4 0 1 0 0-8zM12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4",
     close: "M6 6l12 12M18 6 6 18",
     check: "M5 12.5l4.5 4.5L19 7.5",
     // A speaker cone: alone for the mixer, with sound or crossed out for mute.

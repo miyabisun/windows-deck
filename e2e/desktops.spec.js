@@ -149,7 +149,7 @@ test("tabs work from the keyboard", async ({ page }) => {
   await page.keyboard.press("Tab");
   await expect(page.getByRole("button", { name: "デスクトップを作る" })).toBeFocused();
   await page.keyboard.press("Tab");
-  await expect(page.getByRole("button", { name: "スリープ" })).toBeFocused();
+  await expect(page.getByRole("button", { name: "休止" })).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(page.locator('[data-button="output"]')).toBeFocused();
 });
@@ -181,11 +181,59 @@ test("the + button creates a desktop for a desktop file that has none", async ({
   await expect(page.getByRole("menu")).toHaveCount(0);
 });
 
-test("the moon button puts the PC to sleep", async ({ page }) => {
-  await open(page);
+test("the moon rests the other monitors; only the wake button works until pressed", async ({
+  page,
+}) => {
+  await open(page, "&monitor=T10FA");
   await expect(selected(page)).toHaveText("dev");
-  await page.getByRole("button", { name: "スリープ" }).click();
-  await expect.poll(() => mock.link.sleeps).toBe(1);
+  await page.getByRole("button", { name: "休止" }).click();
+  await expect.poll(() => mock.link.rests).toEqual(["mon-panel"]);
+  const wake = page.getByRole("button", { name: "復帰" });
+  await expect(wake).toBeFocused();
+  await expect(page.getByRole("dialog", { name: "休止中" })).toBeVisible();
+  // The panel shows through it dim and grey.
+  await expect(page.getByRole("dialog", { name: "休止中" })).toHaveCSS(
+    "backdrop-filter",
+    "grayscale(1) brightness(0.3)",
+  );
+  // The panel under it cannot be pressed.
+  await expect(page.locator(".app")).toHaveAttribute("inert", "");
+  await page.locator('[data-button="output"]').click({ force: true });
+  expect(mock.link.presses).toEqual([]);
+
+  await wake.click();
+  await expect.poll(() => mock.link.wakes).toBe(1);
+  await expect(wake).toHaveCount(0);
+  await expect(page.locator(".app")).not.toHaveAttribute("inert");
+  await page.locator('[data-button="output"]').click();
+  await expect.poll(() => mock.link.presses).toEqual(["output"]);
+});
+
+test("a wake that cannot put the brightness back says so and can be pressed again", async ({
+  page,
+}) => {
+  mock.link.resting = true;
+  mock.link.wakeAnswer = {
+    status: 409,
+    body: { error: "unrestored", message: "cannot put the brightness back on 25M2S" },
+  };
+  await open(page, "&monitor=T10FA");
+  // windows-link was resting before the panel opened.
+  const wake = page.getByRole("button", { name: "復帰" });
+  await wake.click();
+  await expect(page.getByRole("status").filter({ hasText: "明るさを戻せなかった" })).toBeVisible();
+  await expect(wake).toBeVisible();
+  await wake.click();
+  await expect(wake).toHaveCount(0);
+  expect(mock.link.wakes).toBe(2);
+});
+
+test("resting without the panel's monitor configured says why on the tab bar", async ({ page }) => {
+  await open(page);
+  await page.getByRole("button", { name: "休止" }).click();
+  await expect(page.getByText("deck のモニターが分からないため休止できません")).toBeVisible();
+  expect(mock.link.rests).toEqual([]);
+  await expect(page.getByRole("button", { name: "復帰" })).toHaveCount(0);
 });
 
 test("buttons with an icon show it", async ({ page }) => {
