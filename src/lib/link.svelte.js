@@ -177,7 +177,7 @@ export class Link {
   }
 
   /**
-   * Sign in to a shop (`fanza`) in the panel's login window, then hand its cookies to
+   * Sign in to a shop (`fanza`, `dlsite`) in the panel's login window, then hand its cookies to
    * windows-link, which reads the games bought from then on.
    * @param {string} shop
    * @returns {Promise<string | null>} why it did not go through, or null

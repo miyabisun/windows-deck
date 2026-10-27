@@ -481,5 +481,11 @@ describe("roundSummary", () => {
     ).toBe(
       "購入一覧を読めませんでした（FANZA へのログインが必要です。ライブラリを開いてログインしてください）。新しいゲームと更新は探せていません",
     );
+    expect(
+      roundSummary(round({ purchases: "DLsite needs signing in again through the panel" }), "UTC")
+        .failure,
+    ).toBe(
+      "購入一覧を読めませんでした（DLsite へのログインが必要です。ライブラリを開いてログインしてください）。新しいゲームと更新は探せていません",
+    );
   });
 });

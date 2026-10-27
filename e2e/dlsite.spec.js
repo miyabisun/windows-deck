@@ -282,6 +282,21 @@ test("the library button's menu shows how the update goes", async ({ page }) => 
   await expect(status).toHaveCount(0);
 });
 
+test("before signing in to DLsite, its button and list say so", async ({ page }) => {
+  mock.link.buttons[mock.link.buttons.length - 1].state.sign_in = "dlsite";
+  mock.link.dlsite.sign_in = "dlsite";
+  await page.goto(`/?link=${encodeURIComponent(mock.url)}`);
+  await expect(page.locator('[data-button="dlsite"]')).toContainText("ログインが必要です");
+  await page.locator('[data-button="dlsite"]').click();
+  await expect(dialog(page).getByRole("alert")).toContainText("DLsite にログインしていません");
+  await page.screenshot({ path: "test-results/dlsite-sign-in.png" });
+  // Only the panel's app has a login window.
+  await dialog(page).getByRole("button", { name: "ログイン", exact: true }).click();
+  await expect(dialog(page).getByRole("status")).toHaveText(
+    "ログインはタッチパネルのアプリからだけできます",
+  );
+});
+
 test("a game without a program says so on its tile", async ({ page }) => {
   await open(page);
   await game(page, "c3").click();

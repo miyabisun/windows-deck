@@ -113,7 +113,9 @@ FANZA sign-in, the button says **ログインが必要です** and the list offe
 login window of the panel's own on the primary monitor (shown on every virtual desktop),
 where you sign in to DMM yourself. Once the window reaches FANZA's library it closes and
 hands DMM's cookies to windows-link (needs windows-link 0.1.21 or later), which then lists
-and downloads the games.
+and downloads the games. DLsite signs in the same way (needs windows-link 0.1.42 or later):
+its window opens DLsite Play, where you pass DLsite's check and sign in yourself, and
+closes once DLsite Play shows, handing DLsite's cookies to windows-link.
 
 Long-press (or right-click) a library button for **ライブラリを更新** (needs windows-link
 0.1.22 or later). For Steam it starts the updates of the games outside the hidden labels

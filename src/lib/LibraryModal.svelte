@@ -16,6 +16,7 @@
   import {
     DRAG_TYPE,
     ORDERS,
+    SHOPS,
     UNLABELED,
     dateLabel,
     labelsLockedReason,
@@ -300,7 +301,7 @@
     {#if library?.sign_in}
       <div class="sign-in" role="alert">
         <p>
-          FANZA
+          {SHOPS[library.sign_in] ?? library.sign_in}
           にログインしていません。ログインすると、買ったゲームの一覧とダウンロードが始まります（ログイン画面はメインモニターに開きます）。
         </p>
         <button

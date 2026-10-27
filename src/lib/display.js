@@ -207,8 +207,8 @@ function purchasesReason(reason) {
     return "windows-link の secrets.yaml に DLsite のアカウントがありません";
   const refused = reason.match(/login page: http status: (\d+)/);
   if (refused) return `DLsite のログイン画面が HTTP ${refused[1]} を返しました`;
-  if (reason.includes("signing in again through the panel"))
-    return "FANZA へのログインが必要です。ライブラリを開いてログインしてください";
+  const signIn = reason.match(/^(\S+) needs signing in again through the panel/);
+  if (signIn) return `${signIn[1]} へのログインが必要です。ライブラリを開いてログインしてください`;
   return reason;
 }
 

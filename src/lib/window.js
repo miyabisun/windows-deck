@@ -23,15 +23,15 @@ export async function loadConfig() {
 /**
  * Open a shop's login window (on the primary monitor, shown on every virtual desktop
  * through windows-link at `link`) and wait until the user has signed in.
- * @param {string} shop only `fanza` has one
+ * @param {string} shop `fanza` or `dlsite`, as windows-link's `sign_in` names it
  * @param {string} link windows-link's URL
  * @returns {Promise<any[]>} the shop's cookies; rejects with `{ error }`: `closed` when the
  *   window was closed first, `not_panel` outside the panel's app
  */
 export async function shopLogin(shop, link) {
-  if (!isTauri() || shop !== "fanza") throw { error: "not_panel" };
+  if (!isTauri()) throw { error: "not_panel" };
   try {
-    return await invoke("fanza_login", { link });
+    return await invoke("shop_login", { link, shop });
   } catch (reason) {
     const message = String(reason);
     throw message.includes("closed") ? { error: "closed" } : { error: "window", message };

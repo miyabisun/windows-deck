@@ -6,6 +6,9 @@
  */
 export const UNLABELED = "@unlabeled";
 
+/** The shops windows-link's `sign_in` names, as the panel writes them. */
+export const SHOPS = { fanza: "FANZA", dlsite: "DLsite" };
+
 /** The drag data of a game being dragged onto a label: its ID. */
 export const DRAG_TYPE = "application/x-windows-deck-game";
 
