@@ -563,7 +563,11 @@ export class Link {
     }
   }
 
-  /** Light the monitors again. A failure keeps the panel resting, to press again. */
+  /**
+   * Light the monitors again. A brightness windows-link could not put back (`unrestored`,
+   * after trying again itself) leaves it awake, and the panel too, saying which; any other
+   * failure keeps the panel resting, to press again.
+   */
   async wake() {
     if (this.restPending) return;
     this.restPending = "wake";
@@ -571,8 +575,8 @@ export class Link {
     try {
       const response = await this.#env.fetch(`${this.#base}/power/wake`, { method: "POST" });
       const body = await response.json().catch(() => null);
-      if (response.ok) this.resting = false;
-      else this.restFailure = restFailure(response.status, body);
+      if (response.ok || body?.error === "unrestored") this.resting = false;
+      if (!response.ok) this.restFailure = restFailure(response.status, body);
     } catch {
       this.restFailure = restFailure(null, null);
     } finally {

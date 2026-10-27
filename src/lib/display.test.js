@@ -400,10 +400,10 @@ describe("restFailure", () => {
     expect(
       restFailure(409, {
         error: "unrestored",
-        message: "cannot put the brightness back on 25M2S; wake again to retry",
+        message: "cannot put the brightness back on 25M2S",
       }),
     ).toBe(
-      "明るさを戻せなかったモニターがあります。もう一度押すと再試行します（cannot put the brightness back on 25M2S; wake again to retry）",
+      "明るさを戻せなかったモニターがあります。そのモニターのボタンで戻してください（cannot put the brightness back on 25M2S）",
     );
     expect(restFailure(500, { error: "rest", message: "store" })).toBe(
       "Windows の操作に失敗しました: store",

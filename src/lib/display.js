@@ -150,7 +150,7 @@ export function restFailure(status, body) {
     case "not_found":
       return "deck のモニターが windows-link に見つかりません";
     case "unrestored":
-      return `明るさを戻せなかったモニターがあります。もう一度押すと再試行します（${body.message}）`;
+      return `明るさを戻せなかったモニターがあります。そのモニターのボタンで戻してください（${body.message}）`;
   }
   return pressFailure(status, body);
 }

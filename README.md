@@ -35,7 +35,8 @@ At the right end of the tab row:
 - **Moon** rests the PC right away instead of putting it to sleep: windows-link darkens every
   monitor but the panel's (brightness 0 over DDC/CI and a black window over each), and the
   panel turns dim and grey with a single wake button. Waking puts each monitor's brightness
-  back. Nothing is unplugged, so none of the USB devices chime as they do after sleep. The
+  back; a monitor whose brightness windows-link could not put back, after trying again
+  itself, does not keep the panel resting: the tab bar says which it is. Nothing is unplugged, so none of the USB devices chime as they do after sleep. The
   panel's monitor is the one set as `monitor` in its configuration; see windows-link's
   "Resting" section.
 

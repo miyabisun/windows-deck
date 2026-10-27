@@ -355,20 +355,16 @@ describe("Link resting", () => {
     expect(t.link.restFailure).toBe("deck のモニターが windows-link に見つかりません");
   });
 
-  it("wakes, and stays resting with the cause when the brightness cannot be put back", async () => {
+  it("wakes, and says which brightness windows-link could not put back", async () => {
     t.link.resting = true;
-    let woke = t.link.wake();
+    const woke = t.link.wake();
     expect(t.requests[0].url).toBe("http://127.0.0.1:4730/power/wake");
     expect(t.requests[0].init.method).toBe("POST");
     t.reply(409, { error: "unrestored", message: "cannot put the brightness back on 25M2S" });
     await woke;
-    expect(t.link.resting).toBe(true);
-    expect(t.link.restFailure).toContain("もう一度押すと再試行します");
-    woke = t.link.wake();
-    t.reply(200, { resting: false });
-    await woke;
+    // windows-link is awake, having tried again itself; the panel is too.
     expect(t.link.resting).toBe(false);
-    expect(t.link.restFailure).toBe(null);
+    expect(t.link.restFailure).toContain("25M2S");
   });
 
   it("ignores a second press while resting or waking is under way", async () => {

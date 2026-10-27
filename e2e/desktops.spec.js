@@ -209,9 +209,7 @@ test("the moon rests the other monitors; only the wake button works until presse
   await expect.poll(() => mock.link.presses).toEqual(["output"]);
 });
 
-test("a wake that cannot put the brightness back says so and can be pressed again", async ({
-  page,
-}) => {
+test("a wake that cannot put a brightness back frees the panel and says so", async ({ page }) => {
   mock.link.resting = true;
   mock.link.wakeAnswer = {
     status: 409,
@@ -221,11 +219,12 @@ test("a wake that cannot put the brightness back says so and can be pressed agai
   // windows-link was resting before the panel opened.
   const wake = page.getByRole("button", { name: "復帰" });
   await wake.click();
-  await expect(page.getByRole("status").filter({ hasText: "明るさを戻せなかった" })).toBeVisible();
-  await expect(wake).toBeVisible();
-  await wake.click();
   await expect(wake).toHaveCount(0);
-  expect(mock.link.wakes).toBe(2);
+  await expect(page.getByText("明るさを戻せなかったモニターがあります")).toBeVisible();
+  await expect(page.locator(".app")).not.toHaveAttribute("inert");
+  await page.locator('[data-button="output"]').click();
+  await expect.poll(() => mock.link.presses).toEqual(["output"]);
+  expect(mock.link.wakes).toBe(1);
 });
 
 test("resting without the panel's monitor configured says why on the tab bar", async ({ page }) => {
