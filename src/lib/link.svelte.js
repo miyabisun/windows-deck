@@ -407,6 +407,35 @@ export class Link {
   }
 
   /**
+   * How a library's round of downloads and updates goes (DLsite, FANZA).
+   * @returns {Promise<{ round: any, failure: string | null }>}
+   */
+  async libraryRound(id) {
+    const { status, body } = await this.#call(
+      "GET",
+      `/buttons/${encodeURIComponent(id)}/library/update`,
+    );
+    return status === 0
+      ? { round: body, failure: null }
+      : { round: null, failure: libraryFailure(status, body) };
+  }
+
+  /**
+   * Open a library game's page in its shop, in the default browser.
+   * @returns {Promise<string | null>} why it failed, if it did
+   */
+  async openPage(id, item) {
+    const { status, body } = await this.#call(
+      "POST",
+      `/buttons/${encodeURIComponent(id)}/library/${encodeURIComponent(item)}/page`,
+    );
+    if (status === 0) return null;
+    return body?.error === "not_found"
+      ? "このゲームの販売ページは分かりません"
+      : libraryFailure(status, body);
+  }
+
+  /**
    * Show an installed library game's folder in Explorer.
    * @returns {Promise<string | null>} why it failed, if it did
    */

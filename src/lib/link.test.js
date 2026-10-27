@@ -559,6 +559,31 @@ describe("Link libraries", () => {
     expect(await missing).toBe("このゲームはインストールされていません");
   });
 
+  it("opens a game's page in the shop", async () => {
+    const opened = t.link.openPage("dlsite", "RJ01707484");
+    expect(t.requests[0].url).toBe("http://127.0.0.1:4730/buttons/dlsite/library/RJ01707484/page");
+    expect(t.requests[0].init.method).toBe("POST");
+    t.reply(204, null);
+    expect(await opened).toBeNull();
+
+    const unknown = t.link.openPage("dlsite", "0a1b2c3d");
+    t.reply(404, { error: "not_found", message: "the game has no page in its shop" });
+    expect(await unknown).toBe("このゲームの販売ページは分かりません");
+  });
+
+  it("reads how a library's round goes", async () => {
+    const read = t.link.libraryRound("dlsite");
+    expect(t.requests[0].url).toBe("http://127.0.0.1:4730/buttons/dlsite/library/update");
+    expect(t.requests[0].init.method).toBe("GET");
+    const round = { doing: null, started: 1, finished: 2, purchases: null, jobs: [] };
+    t.reply(200, round);
+    expect(await read).toEqual({ round, failure: null });
+
+    const down = t.link.libraryRound("dlsite");
+    t.fail();
+    expect(await down).toEqual({ round: null, failure: "windows-link に届きませんでした" });
+  });
+
   it("creates, renames and deletes labels", async () => {
     const created = t.link.createLabel("games", "RPG");
     expect(t.requests[0].url).toBe("http://127.0.0.1:4730/buttons/games/labels");

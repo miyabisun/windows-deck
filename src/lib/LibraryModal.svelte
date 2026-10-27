@@ -1,3 +1,8 @@
+<script module>
+  /** @type {Record<string, string>} each library's last order, kept while the panel runs */
+  const orders = {};
+</script>
+
 <script>
   import { onMount } from "svelte";
   import AskDialog from "./AskDialog.svelte";
@@ -10,10 +15,14 @@
   import Toast, { Notice } from "./Toast.svelte";
   import {
     DRAG_TYPE,
+    ORDERS,
     UNLABELED,
+    dateLabel,
     labelsLockedReason,
+    ordersOf,
     partialReason,
     pictureUrl,
+    sortItems,
     toggleLabel,
     visibleItems,
   } from "./library.js";
@@ -55,9 +64,29 @@
   /** @type {{ kind: "create" } | { kind: "rename" | "delete", label: any } | null} */
   let asking = $state(null);
 
+  /** @type {string | null} the order chosen since the list opened */
+  let chosen = $state(null);
+  const order = $derived(chosen ?? orders[button.id] ?? "recent");
+  /** @type {{ x: number, y: number } | null} where the order menu is open */
+  let orderMenu = $state(null);
+  const offered = $derived(library ? ordersOf(library.items) : []);
+  // An order whose dates are gone (the purchases cannot be read) falls back.
+  const current = $derived(offered.find((o) => o.id === order) ?? ORDERS[0]);
   const shown = $derived(
-    library ? visibleItems(library.items, { query, active, hide: library.hide }) : [],
+    library
+      ? visibleItems(sortItems(library.items, current.id), {
+          query,
+          active,
+          hide: library.hide,
+        })
+      : [],
   );
+
+  /** @param {string} id an `ORDERS` ID */
+  function choose(id) {
+    chosen = id;
+    orders[button.id] = id;
+  }
   // From the button's live state, so a pin made here shows at once.
   const pinned = $derived(new Set((button.state?.pins ?? []).map((/** @type {any} */ p) => p.id)));
   const disabled = $derived(link.status !== "connected");
@@ -167,6 +196,9 @@
   /** @param {any} item */
   function noteOf(item) {
     const notes = [];
+    // The date the list is in order of, first, so the order shows for itself.
+    if (current.note && item[current.id] != null)
+      notes.push(`${current.note} ${dateLabel(item[current.id])}`);
     if (item.detail) notes.push(item.detail);
     if (pinned.has(item.id)) notes.push("TOP に固定中");
     // How a download or update windows-link runs is going (DLsite).
@@ -202,6 +234,20 @@
           if (event.key === "Enter" && !event.isComposing && shown.length) start(shown[0]);
         }}
       />
+      {#if offered.length > 1}
+        <button
+          type="button"
+          class="order"
+          aria-label={`並び順: ${current.label}`}
+          aria-haspopup="menu"
+          onclick={(event) => {
+            const box = event.currentTarget.getBoundingClientRect();
+            orderMenu = { x: box.left, y: box.bottom + 4 };
+          }}
+        >
+          {current.label}
+        </button>
+      {/if}
       <button type="button" class="close" aria-label="閉じる" onclick={onclose}>
         <Icon name="close" />
       </button>
@@ -325,6 +371,20 @@
   />
 {/if}
 
+{#if orderMenu}
+  <ContextMenu
+    x={orderMenu.x}
+    y={orderMenu.y}
+    title="並び順"
+    items={offered.map((o) => ({
+      label: o.label,
+      checked: o.id === current.id,
+      onselect: () => choose(o.id),
+    }))}
+    onclose={() => (orderMenu = null)}
+  />
+{/if}
+
 {#if labelMenu}
   <ContextMenu
     x={labelMenu.x}
@@ -420,6 +480,22 @@
     -webkit-user-select: text
     user-select: text
 
+  // The order of the list, as tall as the search field; it opens a menu to choose.
+  .order
+    flex: none
+    height: 56px
+    padding: 0 var(--sp-4)
+    border: 1px solid var(--c-border)
+    border-radius: var(--radius-md)
+    background: var(--c-surface-raised)
+    color: var(--c-on-surface)
+    font: inherit
+    font-size: var(--fs-label)
+    white-space: nowrap
+    cursor: pointer
+    touch-action: manipulation
+    -webkit-tap-highlight-color: transparent
+
   .close
     display: inline-flex
     align-items: center
@@ -481,6 +557,7 @@
 
   @media (hover: hover)
     .close:hover,
+    .order:hover,
     .chip[aria-pressed="false"]:hover
       background: var(--c-hover-1)
 

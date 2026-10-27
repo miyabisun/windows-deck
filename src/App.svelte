@@ -7,6 +7,7 @@
   import MixerModal from "./lib/MixerModal.svelte";
   import ProgramChooser from "./lib/ProgramChooser.svelte";
   import RestCover from "./lib/RestCover.svelte";
+  import RoundDialog from "./lib/RoundDialog.svelte";
   import Spinner from "./lib/Spinner.svelte";
   import Tile from "./lib/Tile.svelte";
   import Toast, { Notice } from "./lib/Toast.svelte";
@@ -39,18 +40,24 @@
   let pinMenu = $state(null);
   /** @type {{ button: string, pin: { id: string, name: string } } | null} the pinned game whose program is being chosen */
   let pinChoice = $state(null);
-  /** @type {{ button: string, label: string, x: number, y: number } | null} the library button whose menu is open */
+  /** @type {{ button: string, label: string, rounds: boolean, x: number, y: number } | null} the library button whose menu is open */
   let libraryMenu = $state(null);
+  /** @type {{ button: string, label: string } | null} the library whose round is shown */
+  let following = $state(null);
   /** @type {{ button: string, label: string, state: any, x: number, y: number } | null} the cursor highlight whose colours are open */
   let colorChoice = $state(null);
   /** what the last library update started, shown for a few seconds */
   const notice = new Notice();
 
-  /** @param {string} button */
-  async function updateLibrary(button) {
+  /**
+   * A shop's update shows how its round goes; Steam's says what it started.
+   * @param {{ button: string, label: string, rounds: boolean }} menu
+   */
+  async function updateLibrary({ button, label, rounds }) {
+    if (rounds) following = { button, label };
     const started = await link?.updateLibrary(button);
-    // A failure stays on the button (Link keeps it).
-    if (started) notice.show(started);
+    // A failure stays on the button (Link keeps it), and shows in the round's dialog.
+    if (started && !rounds) notice.show(started);
   }
 
   /** @param {string} button @param {{ id: string, name: string }} pin */
@@ -171,7 +178,13 @@
               else link.press(button.id);
             }}
             onlong={button.state?.kind === "library"
-              ? (point) => (libraryMenu = { button: button.id, label: button.label, ...point })
+              ? (point) =>
+                  (libraryMenu = {
+                    button: button.id,
+                    label: button.label,
+                    rounds: button.state.rounds === true,
+                    ...point,
+                  })
               : button.state?.kind === "highlight"
                 ? (point) =>
                     (colorChoice = {
@@ -222,8 +235,31 @@
       x={libraryMenu.x}
       y={libraryMenu.y}
       title={libraryMenu.label}
-      items={[{ label: "ライブラリを更新", onselect: () => updateLibrary(libraryMenu.button) }]}
+      items={[
+        { label: "ライブラリを更新", onselect: () => libraryMenu && updateLibrary(libraryMenu) },
+        ...(libraryMenu.rounds
+          ? [
+              {
+                label: "更新の状況",
+                onselect: () =>
+                  (following = libraryMenu && {
+                    button: libraryMenu.button,
+                    label: libraryMenu.label,
+                  }),
+              },
+            ]
+          : []),
+      ]}
       onclose={() => (libraryMenu = null)}
+    />
+  {/if}
+
+  {#if link && following}
+    <RoundDialog
+      {link}
+      button={following.button}
+      label={following.label}
+      onclose={() => (following = null)}
     />
   {/if}
 

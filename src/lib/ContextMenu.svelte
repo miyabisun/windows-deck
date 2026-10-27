@@ -1,7 +1,11 @@
 <script>
   import { onMount } from "svelte";
+  import Icon from "./Icon.svelte";
 
-  /** @type {{ x: number, y: number, title: string, items: Array<{ label: string, disabled?: boolean, onselect: () => void }>, onclose: () => void }} */
+  /**
+   * Items with `checked` are choices of one, the chosen one checked.
+   * @type {{ x: number, y: number, title: string, items: Array<{ label: string, disabled?: boolean, checked?: boolean, onselect: () => void }>, onclose: () => void }}
+   */
   let { x, y, title, items, onclose } = $props();
 
   /** @type {HTMLDialogElement | undefined} */
@@ -41,7 +45,8 @@
     {#each items as item (item.label)}
       <button
         type="button"
-        role="menuitem"
+        role={item.checked === undefined ? "menuitem" : "menuitemradio"}
+        aria-checked={item.checked}
         class="item"
         disabled={item.disabled}
         onclick={() => {
@@ -50,6 +55,11 @@
           onclose();
         }}
       >
+        {#if item.checked !== undefined}
+          <span class="mark">
+            {#if item.checked}<Icon name="check" />{/if}
+          </span>
+        {/if}
         {item.label}
       </button>
     {/each}
@@ -87,6 +97,9 @@
     white-space: nowrap
 
   .item
+    display: flex
+    align-items: center
+    gap: var(--sp-2)
     min-height: var(--row-height)
     padding: 0 var(--sp-4)
     border: 0
@@ -102,6 +115,16 @@
     &:disabled
       opacity: 0.5
       cursor: default
+
+    // The chosen one: a check and bold, not colour alone.
+    &[aria-checked="true"]
+      font-weight: 600
+
+  .mark
+    display: inline-flex
+    flex: none
+    width: 24px
+    color: var(--c-accent)
 
   @media (hover: hover)
     .item:not(:disabled):hover

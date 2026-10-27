@@ -100,6 +100,14 @@ searched. A game with several programs asks once which one starts it
 (the choice is remembered); its menu has **起動ファイルを選ぶ** to change it. Its labels are
 kept by windows-link, so they work without Steam.
 
+The list comes as windows-link orders it: the games played last first, then those
+installed last. The button next to the search field puts it in order of DLsite's update
+date or of the purchase date instead, newest first (an order shows only when windows-link
+knows that date for some game; games without it follow). While it is so, each game's note
+starts with that date, and the order stays for that library until the panel restarts. A
+game's menu (on its tile in the list or on TOP) has **販売ページを開く**, which opens its DLsite
+page in the default browser.
+
 A `fanza.library` button opens the FANZA games bought the same way. While windows-link has no
 FANZA sign-in, the button says **ログインが必要です** and the list offers **ログイン**: it opens a
 login window of the panel's own on the primary monitor (shown on every virtual desktop),
@@ -110,16 +118,21 @@ and downloads the games.
 Long-press (or right-click) a library button for **ライブラリを更新** (needs windows-link
 0.1.22 or later). For Steam it starts the updates of the games outside the hidden labels
 and opens Steam's install screen for those not installed, where you confirm the folder and
-any EULA. For DLsite and FANZA it starts windows-link's downloads of the games bought and
-not there yet, and of DLsite's updates, now instead of at the next 6-hourly round. What
-started shows at the bottom of the screen for a few seconds; when nothing could start,
-the button says why.
+any EULA; what started shows at the bottom of the screen for a few seconds. For DLsite and
+FANZA it starts windows-link's downloads of the games bought and not there yet, and of
+DLsite's updates, now instead of at the next 6-hourly round, and opens **更新の状況**, which
+the same menu also has: what the round is doing (reading the purchases, or how many of
+its downloads and updates are done) or when the last one ended, why the purchases could
+not be read, and each game with how it goes. It follows the round while open, and
+**今すぐ更新** starts another once it has ended. When nothing could start, the button says
+why.
 
 ## Requirements
 
 - Windows 10 or 11 (x64) with the WebView2 runtime (included in Windows 11)
 - windows-link 0.1.3 or later running on the same PC (it allows this panel's window to
-  read its API); the Steam library needs 0.1.6 or later, the DLsite library 0.1.9 or later (0.1.10 for its art)
+  read its API); the Steam library needs 0.1.6 or later, the DLsite library 0.1.9 or later (0.1.10 for its art,
+  0.1.41 for its orders by date, its shop pages and **更新の状況**)
 - To build: Rust 1.96 (selected by `rust-toolchain.toml`) with the MSVC toolchain, and
   Node.js 24
 

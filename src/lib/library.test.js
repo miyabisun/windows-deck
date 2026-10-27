@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   UNLABELED,
+  dateLabel,
   labelsLockedReason,
+  ordersOf,
   partialReason,
   pictureUrl,
   pinsOf,
+  sortItems,
   toggleLabel,
   visibleItems,
 } from "./library.js";
@@ -149,5 +152,36 @@ describe("pinsOf", () => {
       { button: "games", pin: pin("2"), whole: false },
       { button: "more", pin: pin("3"), whole: true },
     ]);
+  });
+});
+
+describe("the order of a list", () => {
+  const dated = (id, updated, bought) => ({ ...item(id, id), updated, bought });
+  const list = [
+    dated("1", 300, null),
+    dated("2", null, null),
+    dated("3", 500, 10),
+    dated("4", 100, 20),
+  ];
+
+  it("keeps windows-link's order, or puts the newest date first and the undated last", () => {
+    expect(ids(sortItems(list, "recent"))).toEqual(["1", "2", "3", "4"]);
+    expect(ids(sortItems(list, "updated"))).toEqual(["3", "1", "4", "2"]);
+    // Games without the date keep windows-link's order among themselves.
+    expect(ids(sortItems(list, "bought"))).toEqual(["4", "3", "1", "2"]);
+    expect(ids(list)).toEqual(["1", "2", "3", "4"]);
+  });
+
+  it("offers only the orders some game has a date for", () => {
+    expect(ordersOf(list).map((o) => o.id)).toEqual(["recent", "updated", "bought"]);
+    expect(ordersOf([dated("1", 300, null)]).map((o) => o.id)).toEqual(["recent", "updated"]);
+    // Steam's games have no dates.
+    expect(ordersOf(items).map((o) => o.id)).toEqual(["recent"]);
+  });
+
+  it("writes a date as the day it was", () => {
+    // 2026-10-15 15:00 UTC is the 16th in Japan.
+    expect(dateLabel(1_792_076_400, "Asia/Tokyo")).toBe("2026/10/16");
+    expect(dateLabel(1_792_076_400, "UTC")).toBe("2026/10/15");
   });
 });

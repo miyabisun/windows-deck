@@ -9,6 +9,52 @@ export const UNLABELED = "@unlabeled";
 /** The drag data of a game being dragged onto a label: its ID. */
 export const DRAG_TYPE = "application/x-windows-deck-game";
 
+/**
+ * The orders a list can be in: windows-link's own (the games played last first, then
+ * those installed last), or newest first by a date windows-link gives a game (Unix
+ * seconds). `note` heads a game's note with that date while the list is in its order.
+ */
+export const ORDERS = [
+  { id: "recent", label: "最近遊んだ順", note: null },
+  { id: "updated", label: "更新日の新しい順", note: "更新" },
+  { id: "bought", label: "購入日の新しい順", note: "購入" },
+];
+
+/**
+ * The orders worth offering for `items`: windows-link's own, and those by a date some
+ * game has (Steam's games have none).
+ * @param {Array<Record<string, any>>} items
+ */
+export function ordersOf(items) {
+  return ORDERS.filter((o) => o.id === "recent" || items.some((i) => i[o.id] != null));
+}
+
+/**
+ * `items` in `order`: as windows-link gave them, or newest first by that date, the games
+ * without it after them in windows-link's order.
+ * @template {Record<string, any>} T
+ * @param {T[]} items @param {string} order an `ORDERS` ID
+ * @returns {T[]}
+ */
+export function sortItems(items, order) {
+  if (order === "recent") return items;
+  const dated = items.filter((i) => i[order] != null).sort((a, b) => b[order] - a[order]);
+  return dated.concat(items.filter((i) => i[order] == null));
+}
+
+/**
+ * A date windows-link gives (Unix seconds) as the day it was, such as 2026/10/16.
+ * @param {number} seconds @param {string} [timeZone] the panel's own unless given
+ */
+export function dateLabel(seconds, timeZone) {
+  return new Intl.DateTimeFormat("ja-JP", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(seconds * 1000);
+}
+
 /** Fold full-width letters and case so that "ｓｔｒｅｅｔ" finds "Street". */
 const fold = (/** @type {string} */ text) => text.normalize("NFKC").toLowerCase();
 

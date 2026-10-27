@@ -1,6 +1,9 @@
 import { expect, test } from "@playwright/test";
 import { dlsiteButton, startMockLink } from "./mock-link.js";
 
+// The dates in the mock are written as they were in Japan.
+test.use({ timezoneId: "Asia/Tokyo" });
+
 /** @type {Awaited<ReturnType<typeof startMockLink>>} */
 let mock;
 
@@ -157,6 +160,126 @@ test("a game's license key is shown with a button that copies it", async ({ page
   await expect(page.getByRole("dialog", { name: "シリアル番号" })).toContainText(
     "このゲームにはシリアル番号がありません",
   );
+});
+
+test("the list goes in order of DLsite's update or purchase date, and stays so", async ({
+  page,
+}) => {
+  await open(page);
+  const order = dialog(page).getByRole("button", { name: "並び順" });
+  await expect(order).toHaveText("最近遊んだ順");
+  await expect
+    .poll(() => names(page))
+    .toEqual(["湿度の高い夏のマゾ", "催眠アプリ", "壊れたゲーム"]);
+  await order.click();
+  const menu = page.getByRole("menu", { name: "並び順" });
+  await expect(menu.getByRole("menuitemradio")).toHaveText([
+    "最近遊んだ順",
+    "更新日の新しい順",
+    "購入日の新しい順",
+  ]);
+  await expect(menu.getByRole("menuitemradio", { name: "最近遊んだ順" })).toHaveAttribute(
+    "aria-checked",
+    "true",
+  );
+  const tab = (await page.getByRole("tab").first().boundingBox()).height;
+  for (const row of await menu.getByRole("menuitemradio").all())
+    expect((await row.boundingBox()).height).toBeGreaterThanOrEqual(tab);
+  await page.screenshot({ path: "test-results/dlsite-order-menu.png" });
+  await menu.getByRole("menuitemradio", { name: "更新日の新しい順" }).click();
+  await expect(menu).toHaveCount(0);
+  await expect(order).toHaveText("更新日の新しい順");
+  await expect
+    .poll(() => names(page))
+    .toEqual(["催眠アプリ", "湿度の高い夏のマゾ", "壊れたゲーム"]);
+  // The date the list is in order of heads each note.
+  await expect(game(page, "b2")).toContainText("更新 2026/10/28・Saimin Soft");
+  await expect(game(page, "a1")).toContainText("更新 2026/10/16・3Djp_Art");
+  await expect(game(page, "c3").locator(".note")).toHaveText("Other");
+  await page.screenshot({ path: "test-results/dlsite-order-updated.png" });
+
+  await order.click();
+  await page.getByRole("menuitemradio", { name: "購入日の新しい順" }).click();
+  await expect
+    .poll(() => names(page))
+    .toEqual(["湿度の高い夏のマゾ", "催眠アプリ", "壊れたゲーム"]);
+  await expect(game(page, "a1")).toContainText("購入 2026/01/02・3Djp_Art");
+  await expect(game(page, "b2").locator(".note")).toHaveText("Saimin Soft");
+
+  // Opened again, the list keeps its order.
+  await page.keyboard.press("Escape");
+  await page.locator('[data-button="dlsite"]').click();
+  await expect(order).toHaveText("購入日の新しい順");
+  await expect(game(page, "a1")).toContainText("購入 2026/01/02");
+});
+
+test("a game's menu opens its DLsite page, also from TOP", async ({ page }) => {
+  mock.link.buttons[mock.link.buttons.length - 1] = dlsiteButton([
+    { id: "a1", name: "湿度の高い夏のマゾ" },
+  ]);
+  await open(page);
+  await game(page, "a1").click({ button: "right" });
+  await page.getByRole("menuitem", { name: "販売ページを開く" }).click();
+  await expect.poll(() => mock.link.pages).toEqual(["a1"]);
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  await expect(dialog(page)).toBeVisible();
+  // A game not known on DLsite has no page to open.
+  await game(page, "c3").click({ button: "right" });
+  await expect(page.getByRole("menu", { name: "壊れたゲーム" })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "販売ページを開く" })).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Escape");
+
+  const pinned = page.locator('[data-button="dlsite/a1"]');
+  await pinned.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "販売ページを開く" }).click();
+  await expect.poll(() => mock.link.pages).toEqual(["a1", "a1"]);
+});
+
+test("the library button's menu shows how the update goes", async ({ page }) => {
+  await page.goto(`/?link=${encodeURIComponent(mock.url)}`);
+  const tile = page.locator('[data-button="dlsite"]');
+  await tile.click({ button: "right" });
+  const menu = page.getByRole("menu", { name: "DLsite" });
+  await expect(menu.getByRole("menuitem")).toHaveText(["ライブラリを更新", "更新の状況"]);
+  await menu.getByRole("menuitem", { name: "更新の状況" }).click();
+  const status = page.getByRole("dialog", { name: "更新の状況" });
+  await expect(status).toContainText("更新の状況: DLsite");
+  await expect(status).toContainText("10/28 01:35 に終わりました");
+  await expect(status.getByRole("alert")).toHaveText(
+    "購入一覧を読めませんでした（DLsite のログイン画面が HTTP 403 を返しました）。新しいゲームと更新は探せていません",
+  );
+  await page.screenshot({ path: "test-results/dlsite-round-failed.png" });
+
+  // It follows the round while open.
+  mock.link.dlsiteRound = {
+    doing: "downloads",
+    started: 1_793_119_000,
+    finished: null,
+    purchases: null,
+    jobs: [
+      { id: "RJ7", name: "来たゲーム", status: "完了" },
+      { id: "RJ8", name: "来るゲーム", status: "ダウンロード中 40%" },
+    ],
+  };
+  await expect(status).toContainText("ダウンロードと更新: 2 件のうち 1 件が完了");
+  await expect(status.getByRole("alert")).toHaveCount(0);
+  await expect(status.getByRole("listitem")).toHaveText([
+    /来たゲーム\s*完了/,
+    /来るゲーム\s*ダウンロード中 40%/,
+  ]);
+  const now = status.getByRole("button", { name: "今すぐ更新" });
+  await expect(now).toBeDisabled();
+  await page.screenshot({ path: "test-results/dlsite-round-running.png" });
+
+  // Once it ends, it can be started again from here.
+  mock.link.dlsiteRound = { ...mock.link.dlsiteRound, doing: null, finished: 1_793_119_600 };
+  mock.link.updateAnswer = { status: 202, body: { round: true } };
+  await expect(now).toBeEnabled();
+  await now.click();
+  await expect.poll(() => mock.link.updates).toEqual(["dlsite"]);
+  await status.getByRole("button", { name: "閉じる" }).click();
+  await expect(status).toHaveCount(0);
 });
 
 test("a game without a program says so on its tile", async ({ page }) => {

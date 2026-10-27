@@ -5,7 +5,7 @@
   import ProgramChooser from "./ProgramChooser.svelte";
   import { itemKey } from "./link.svelte.js";
 
-  /** @type {{ link: import("./link.svelte.js").Link, button: string, item: { id: string, name: string, installed?: boolean, choosable?: boolean }, pinned: boolean, x: number, y: number, onclose: () => void, onchange?: () => void, onnotice?: (text: string) => void }} */
+  /** @type {{ link: import("./link.svelte.js").Link, button: string, item: { id: string, name: string, installed?: boolean, choosable?: boolean, page?: string | null }, pinned: boolean, x: number, y: number, onclose: () => void, onchange?: () => void, onnotice?: (text: string) => void }} */
   let {
     link,
     button,
@@ -21,10 +21,11 @@
   let picking = $state(false);
   let choosing = $state(false);
   let showingKeys = $state(false);
+  const library = $derived(link.buttons.find((/** @type {any} */ b) => b.id === button)?.state);
   // A library whose games can have license keys (DLsite) says so in its button's state.
-  const keys = $derived(
-    link.buttons.find((/** @type {any} */ b) => b.id === button)?.state?.license_keys === true,
-  );
+  const keys = $derived(library?.license_keys === true);
+  // A game in the list says whether it has a shop page; a pinned one goes by its library.
+  const page = $derived(item.page !== undefined ? !!item.page : library?.pages === true);
 
   // The menu closes as soon as a choice is made, so each action reads what it needs
   // from the props before it waits.
@@ -40,6 +41,12 @@
   async function browse() {
     const key = itemKey(button, item.id);
     const failed = await link.openFolder(button, item.id);
+    if (failed) link.failures[key] = failed;
+  }
+
+  async function openPage() {
+    const key = itemKey(button, item.id);
+    const failed = await link.openPage(button, item.id);
     if (failed) link.failures[key] = failed;
   }
 </script>
@@ -58,6 +65,7 @@
     items={[
       { label: pinned ? "TOPから外す" : "TOPに固定", onselect: pin },
       { label: "ローカルファイル閲覧", disabled: item.installed === false, onselect: browse },
+      ...(page ? [{ label: "販売ページを開く", onselect: openPage }] : []),
       { label: "ラベル設定", onselect: () => (picking = true) },
       ...(item.choosable
         ? [{ label: "起動ファイルを選ぶ", onselect: () => (choosing = true) }]

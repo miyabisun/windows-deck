@@ -379,6 +379,8 @@ test("a library button's menu updates the library and says what started", async 
   const search = page.getByRole("searchbox", { name: "名前で探す" });
   await expect(search).toHaveCount(0);
   await expectTabTall(page, [page.getByRole("menuitem", { name: "ライブラリを更新" })]);
+  // Steam's updates have no rounds to follow.
+  await expect(page.getByRole("menuitem", { name: "更新の状況" })).toHaveCount(0);
   await page.screenshot({ path: "test-results/library-update-menu.png" });
   await page.getByRole("menuitem", { name: "ライブラリを更新" }).click();
   await expect(menu).toHaveCount(0);
@@ -418,16 +420,16 @@ test("a library that cannot be updated says why on its button until it is opened
   await expect(tile).not.toContainText("ライブラリを更新できません");
 });
 
-test("a shop's update starts its downloads", async ({ page }) => {
+test("a shop's update starts its downloads and shows how they go", async ({ page }) => {
   mock.link.buttons.push(dlsiteButton());
   mock.link.updateAnswer = { status: 202, body: { round: true } };
   await open(page);
   const tile = page.locator('[data-button="dlsite"]');
   await expect(tile).toContainText(/DLsite\s*ライブラリ/);
   await tile.click({ button: "right" });
-  await page.getByRole("menu", { name: "DLsite" }).getByRole("menuitem").click();
-  await expect(page.getByRole("status").filter({ hasText: "ダウンロード" })).toHaveText(
-    "ダウンロードと更新を始めました（進み具合はライブラリに出ます）",
+  await page.getByRole("menuitem", { name: "ライブラリを更新" }).click();
+  await expect(page.getByRole("dialog", { name: "更新の状況" })).toContainText(
+    "更新の状況: DLsite",
   );
   expect(mock.link.updates).toEqual(["dlsite"]);
 });

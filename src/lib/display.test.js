@@ -9,6 +9,7 @@ import {
   libraryFailure,
   pressFailure,
   restFailure,
+  roundSummary,
   signInFailure,
   switchFailure,
   updateFailure,
@@ -407,6 +408,78 @@ describe("restFailure", () => {
     );
     expect(restFailure(500, { error: "rest", message: "store" })).toBe(
       "Windows の操作に失敗しました: store",
+    );
+  });
+});
+
+describe("roundSummary", () => {
+  const job = (id, status) => ({ id, name: `${id} name`, status });
+  const round = (fields) => ({
+    doing: null,
+    started: null,
+    finished: null,
+    purchases: null,
+    jobs: [],
+    ...fields,
+  });
+  const at = 1_793_118_930; // 2026-10-28 01:35:30 in Japan
+
+  it("says what the round under way does", () => {
+    expect(roundSummary(round({ doing: "purchases", started: at }), "Asia/Tokyo")).toEqual({
+      busy: true,
+      text: "購入一覧を読んでいます",
+      failure: null,
+    });
+    const downloads = round({
+      doing: "downloads",
+      started: at,
+      jobs: [job("RJ1", "完了"), job("RJ2", "ダウンロード中 40%"), job("RJ3", "更新待ち")],
+    });
+    expect(roundSummary(downloads, "Asia/Tokyo")).toEqual({
+      busy: true,
+      text: "ダウンロードと更新: 3 件のうち 1 件が完了",
+      failure: null,
+    });
+  });
+
+  it("says how the last round ended and why the purchases could not be read", () => {
+    expect(roundSummary(round({}), "Asia/Tokyo")).toEqual({
+      busy: false,
+      text: "windows-link の起動から、まだ一度も更新していません",
+      failure: null,
+    });
+    const nothing = round({ started: at - 60, finished: at });
+    expect(roundSummary(nothing, "Asia/Tokyo")).toEqual({
+      busy: false,
+      text: "10/28 01:35 に終わりました。新しいゲームも更新もありませんでした",
+      failure: null,
+    });
+    const some = round({
+      started: at - 60,
+      finished: at,
+      jobs: [job("RJ1", "完了"), job("RJ2", "ダウンロードに失敗: disk full")],
+    });
+    expect(roundSummary(some, "Asia/Tokyo").text).toBe(
+      "10/28 01:35 に終わりました。完了 1 件・失敗 1 件",
+    );
+    const blocked = round({
+      started: at - 60,
+      finished: at,
+      purchases: "DLsite's login page: http status: 403",
+    });
+    expect(roundSummary(blocked, "Asia/Tokyo").failure).toBe(
+      "購入一覧を読めませんでした（DLsite のログイン画面が HTTP 403 を返しました）。新しいゲームと更新は探せていません",
+    );
+    expect(
+      roundSummary(round({ purchases: "secrets.yaml has no DLsite account" }), "UTC").failure,
+    ).toBe(
+      "購入一覧を読めませんでした（windows-link の secrets.yaml に DLsite のアカウントがありません）。新しいゲームと更新は探せていません",
+    );
+    expect(
+      roundSummary(round({ purchases: "FANZA needs signing in again through the panel" }), "UTC")
+        .failure,
+    ).toBe(
+      "購入一覧を読めませんでした（FANZA へのログインが必要です。ライブラリを開いてログインしてください）。新しいゲームと更新は探せていません",
     );
   });
 });

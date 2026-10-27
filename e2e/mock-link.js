@@ -105,15 +105,26 @@ export const dlsiteButton = (pins = []) => ({
   desktop: null,
   except: [],
   icon: false,
-  state: { kind: "library", pins, pictures: "whole", license_keys: true },
+  state: {
+    kind: "library",
+    pins,
+    pictures: "whole",
+    license_keys: true,
+    rounds: true,
+    pages: true,
+  },
 });
+
+/** Where the DLsite page of a work in `initialDlsite` is. */
+export const dlsitePage = (id) => `https://www.dlsite.com/maniax/work/=/product_id/${id}.html`;
 
 /**
  * The games behind `dlsiteButton`: "a1" starts, "b2" has two programs to choose from,
- * "c3" has none.
+ * "c3" has none. "a1" (updated 2026/10/16, bought 2026/01/02 in Japan) and "b2"
+ * (updated 2026/10/28) are known works with a page; "c3" is not.
  */
 export function initialDlsite() {
-  const game = (id, name, detail, choosable = false, image = null) => ({
+  const game = (id, name, detail, choosable = false, image = null, dates = {}) => ({
     id,
     name,
     detail,
@@ -121,11 +132,22 @@ export function initialDlsite() {
     image,
     installed: true,
     labels: [],
+    updated: null,
+    bought: null,
+    page: null,
+    ...dates,
   });
   return {
     items: [
-      game("a1", "湿度の高い夏のマゾ", "3Djp_Art", false, "/dlsite-art/a1.svg"),
-      game("b2", "催眠アプリ", "Saimin Soft", true),
+      game("a1", "湿度の高い夏のマゾ", "3Djp_Art", false, "/dlsite-art/a1.svg", {
+        updated: 1_792_076_400,
+        bought: 1_767_290_645,
+        page: dlsitePage("RJ01"),
+      }),
+      game("b2", "催眠アプリ", "Saimin Soft", true, null, {
+        updated: 1_793_118_930,
+        page: dlsitePage("RJ02"),
+      }),
       game("c3", "壊れたゲーム", "Other"),
     ],
     labels: [
@@ -209,6 +231,16 @@ export async function startMockLink() {
     updates: [],
     /** @type {{ status: number, body: any } | null} the next update's answer, else Steam's counts */
     updateAnswer: null,
+    /** how the DLsite library's round goes (`GET …/library/update`) */
+    dlsiteRound: {
+      doing: null,
+      started: 1_793_118_870,
+      finished: 1_793_118_930,
+      purchases: "DLsite's login page: http status: 403",
+      jobs: [],
+    },
+    /** @type {string[]} DLsite games whose page was opened */
+    pages: [],
     /** @type {string[]} the colours chosen for the cursor highlight, in order */
     colors: [],
   };
@@ -299,6 +331,14 @@ export async function startMockLink() {
       );
     }
     const update = req.url.match(/^\/buttons\/([^/]+)\/library\/update$/);
+    if (req.method === "GET" && update && !link.down) {
+      res.setHeader("Content-Type", "application/json");
+      if (update[1] !== "dlsite") {
+        res.statusCode = 404;
+        return res.end(JSON.stringify({ error: "no_rounds", message: "no rounds" }));
+      }
+      return res.end(JSON.stringify(link.dlsiteRound));
+    }
     if (req.method === "POST" && update && !link.down) {
       link.updates.push(update[1]);
       const { status, body } = link.updateAnswer ?? {
@@ -311,7 +351,7 @@ export async function startMockLink() {
       return res.end(JSON.stringify(body));
     }
     const dl = req.url.match(
-      /^\/buttons\/dlsite\/library(?:\/([^/]+)\/(start|programs|program|image|keys))?$/,
+      /^\/buttons\/dlsite\/library(?:\/([^/]+)\/(start|programs|program|image|keys|page))?$/,
     );
     if (dl && !link.down) {
       const [, item, action] = dl;
@@ -333,6 +373,13 @@ export async function startMockLink() {
         );
       }
       if (action === "keys") return json(200, { keys: keys[item] ?? [] });
+      if (action === "page") {
+        if (!listing.items.find((i) => i.id === item)?.page)
+          return json(404, { error: "not_found", message: "the game has no page in its shop" });
+        link.pages.push(item);
+        res.statusCode = 204;
+        return res.end();
+      }
       if (action === "programs")
         return programs[item] ? json(200, programs[item]) : json(404, { error: "not_found" });
       if (action === "program") {

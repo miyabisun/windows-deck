@@ -199,6 +199,60 @@ export function updateResult(body) {
 }
 
 /**
+ * Why a shop's round could not read the purchases, in words the user can act on.
+ * @param {string} reason windows-link's `purchases`
+ */
+function purchasesReason(reason) {
+  if (reason.includes("no DLsite account"))
+    return "windows-link の secrets.yaml に DLsite のアカウントがありません";
+  const refused = reason.match(/login page: http status: (\d+)/);
+  if (refused) return `DLsite のログイン画面が HTTP ${refused[1]} を返しました`;
+  if (reason.includes("signing in again through the panel"))
+    return "FANZA へのログインが必要です。ライブラリを開いてログインしてください";
+  return reason;
+}
+
+/**
+ * What a shop's round of downloads and updates is doing, or how the last one ended,
+ * and why it could not read the purchases.
+ * @param {any} round windows-link's `GET …/library/update`
+ * @param {string} [timeZone] where the end is written; the panel's own unless given
+ * @returns {{ busy: boolean, text: string, failure: string | null }}
+ */
+export function roundSummary(round, timeZone) {
+  const failure = round.purchases
+    ? `購入一覧を読めませんでした（${purchasesReason(round.purchases)}）。新しいゲームと更新は探せていません`
+    : null;
+  const jobs = round.jobs ?? [];
+  const done = jobs.filter((/** @type {any} */ j) => j.status === "完了").length;
+  if (round.doing === "purchases") return { busy: true, text: "購入一覧を読んでいます", failure };
+  if (round.doing === "downloads")
+    return {
+      busy: true,
+      text: `ダウンロードと更新: ${jobs.length} 件のうち ${done} 件が完了`,
+      failure,
+    };
+  if (!round.finished)
+    return { busy: false, text: "windows-link の起動から、まだ一度も更新していません", failure };
+  const ended = new Intl.DateTimeFormat("ja-JP", {
+    timeZone,
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(round.finished * 1000);
+  const failed = jobs.filter((/** @type {any} */ j) => j.status.includes("失敗")).length;
+  // Without the purchases it could not look, so "nothing new" would not be true.
+  const result = jobs.length
+    ? `完了 ${done} 件・失敗 ${failed} 件`
+    : failure
+      ? null
+      : "新しいゲームも更新もありませんでした";
+  return { busy: false, text: `${ended} に終わりました${result ? `。${result}` : ""}`, failure };
+}
+
+/**
  * The reason shown on a library button after it could not be updated.
  * @param {number | null} status HTTP status, or null when the request did not get an answer
  * @param {any} body the JSON error body, if any
