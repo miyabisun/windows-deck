@@ -481,6 +481,18 @@ describe("roundSummary", () => {
     ).toBe(
       "購入一覧を読めませんでした（FANZA へのログインが必要です。ライブラリを開いてログインしてください）。新しいゲームと更新は探せていません",
     );
+    // A games folder that cannot be read keeps the round from downloading.
+    const unreadable = round({
+      started: at - 60,
+      finished: at,
+      folder: "D:\\DLsiteNest\\Game\\maker: 存在しないデバイスを指定しました。 (os error 433)",
+    });
+    expect(roundSummary(unreadable, "Asia/Tokyo")).toEqual({
+      busy: false,
+      text: "10/28 01:35 に終わりました",
+      failure:
+        "ゲームのフォルダを読めないため、ダウンロードしませんでした（D:\\DLsiteNest\\Game\\maker: 存在しないデバイスを指定しました。 (os error 433)）",
+    });
     expect(
       roundSummary(round({ purchases: "DLsite needs signing in again through the panel" }), "UTC")
         .failure,

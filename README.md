@@ -124,8 +124,8 @@ any EULA; what started shows at the bottom of the screen for a few seconds. For 
 FANZA it starts windows-link's downloads of the games bought and not there yet, and of
 DLsite's updates, now instead of at the next 6-hourly round, and opens **更新の状況**, which
 the same menu also has: what the round is doing (reading the purchases, or how many of
-its downloads and updates are done) or when the last one ended, why the purchases could
-not be read, and each game with how it goes. It follows the round while open, and
+its downloads and updates are done) or when the last one ended, why the purchases or the
+games' folder could not be read, and each game with how it goes. It follows the round while open, and
 **今すぐ更新** starts another once it has ended. When nothing could start, the button says
 why.
 

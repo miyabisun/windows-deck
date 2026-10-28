@@ -222,7 +222,9 @@ function purchasesReason(reason) {
 export function roundSummary(round, timeZone) {
   const failure = round.purchases
     ? `購入一覧を読めませんでした（${purchasesReason(round.purchases)}）。新しいゲームと更新は探せていません`
-    : null;
+    : round.folder
+      ? `ゲームのフォルダを読めないため、ダウンロードしませんでした（${round.folder}）`
+      : null;
   const jobs = round.jobs ?? [];
   const done = jobs.filter((/** @type {any} */ j) => j.status === "完了").length;
   if (round.doing === "purchases") return { busy: true, text: "購入一覧を読んでいます", failure };
