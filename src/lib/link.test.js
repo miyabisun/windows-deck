@@ -367,6 +367,24 @@ describe("Link resting", () => {
     expect(t.link.restFailure).toContain("25M2S");
   });
 
+  it("follows resting started or ended elsewhere, dropping a stale reason", () => {
+    t.socket().send({ type: "power", resting: true });
+    expect(t.link.resting).toBe(true);
+    t.link.restFailure = "windows-link に届きませんでした";
+    t.socket().send({ type: "power", resting: false });
+    expect(t.link.resting).toBe(false);
+    expect(t.link.restFailure).toBe(null);
+  });
+
+  it("keeps why its own wake fell short when windows-link then says it is awake", async () => {
+    t.link.resting = true;
+    const woke = t.link.wake();
+    t.reply(409, { error: "unrestored", message: "cannot put the brightness back on 25M2S" });
+    await woke;
+    t.socket().send({ type: "power", resting: false });
+    expect(t.link.restFailure).toContain("25M2S");
+  });
+
   it("ignores a second press while resting or waking is under way", async () => {
     t.link.resting = true;
     const woke = t.link.wake();

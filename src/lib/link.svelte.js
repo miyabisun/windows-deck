@@ -121,6 +121,10 @@ export class Link {
       this.desktopsError = message.error ?? null;
       this.desktopFailure = null;
       if (message.reason === "reconnected") this.pinRound += 1;
+    } else if (message.type === "power" && message.resting !== this.resting) {
+      // Rested or woken elsewhere (home-link); a reason from before no longer applies.
+      this.resting = message.resting;
+      this.restFailure = null;
     }
   }
 

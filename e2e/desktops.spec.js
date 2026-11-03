@@ -227,6 +227,19 @@ test("a wake that cannot put a brightness back frees the panel and says so", asy
   expect(mock.link.wakes).toBe(1);
 });
 
+test("resting and waking from home-link show and lift the wake button", async ({ page }) => {
+  await open(page, "&monitor=T10FA");
+  await expect(selected(page)).toHaveText("dev");
+  mock.setResting(true);
+  const wake = page.getByRole("button", { name: "復帰" });
+  await expect(wake).toBeFocused();
+  await expect(page.locator(".app")).toHaveAttribute("inert", "");
+  mock.setResting(false);
+  await expect(wake).toHaveCount(0);
+  await expect(page.locator(".app")).not.toHaveAttribute("inert");
+  expect(mock.link.wakes).toBe(0);
+});
+
 test("resting without the panel's monitor configured says why on the tab bar", async ({ page }) => {
   await open(page);
   await page.getByRole("button", { name: "休止" }).click();

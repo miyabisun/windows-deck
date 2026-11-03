@@ -248,6 +248,10 @@ export async function startMockLink() {
   const broadcast = (message) => {
     for (const socket of sockets) socket.send(JSON.stringify(message));
   };
+  const setResting = (resting) => {
+    link.resting = resting;
+    broadcast({ type: "power", resting });
+  };
 
   const server = http.createServer(async (req, res) => {
     res.setHeader("Access-Control-Allow-Origin", "*");
@@ -312,14 +316,15 @@ export async function startMockLink() {
         res.statusCode = 404;
         return res.end(JSON.stringify({ error: "not_found", message: "no connected monitor" }));
       }
-      link.resting = true;
+      setResting(true);
       return res.end(JSON.stringify({ resting: true }));
     }
     if (req.method === "POST" && req.url === "/power/wake" && !link.down) {
       link.wakes += 1;
       const { status, body } = link.wakeAnswer ?? { status: 200, body: { resting: false } };
       link.wakeAnswer = null;
-      if (status < 400) link.resting = false;
+      // windows-link is awake after a brightness it could not put back, too.
+      if (status < 400 || body.error === "unrestored") setResting(false);
       res.statusCode = status;
       res.setHeader("Content-Type", "application/json");
       return res.end(JSON.stringify(body));
@@ -638,6 +643,8 @@ export async function startMockLink() {
       link.buttons[index] = button;
       broadcast({ type: "button", button });
     },
+    /** Rest or wake as if home-link asked, and notify like windows-link does. */
+    setResting,
     /** Change the desktops as if Windows changed them, and notify like windows-link does. */
     setDesktops(desktops, reason = "changed") {
       link.desktops = desktops;
