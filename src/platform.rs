@@ -23,7 +23,7 @@ use windows_sys::Win32::{
     System::{
         Pipes::{
             ConnectNamedPipe, CreateNamedPipeW, DisconnectNamedPipe, PIPE_READMODE_BYTE,
-            PIPE_TYPE_BYTE, PIPE_WAIT,
+            PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_BYTE, PIPE_WAIT,
         },
         Threading::CreateMutexW,
     },
@@ -144,7 +144,8 @@ pub fn listen_for_starts(sink: UnboundedSender<Vec<String>>) {
                 CreateNamedPipeW(
                     name.as_ptr(),
                     PIPE_ACCESS_INBOUND,
-                    PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
+                    // Only this PC's processes hand their starts over, not the network's.
+                    PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS,
                     1,
                     0,
                     4096,

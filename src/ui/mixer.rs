@@ -1,14 +1,18 @@
 //! The mixer: the whole volume on top, then each application with sound; tap where a slider
 //! should be or slide it, and the speaker of a row mutes it.
 
-use std::{cell::Cell, collections::HashMap, rc::Rc};
+use std::{
+    cell::{Cell, RefCell},
+    collections::HashMap,
+    rc::Rc,
+};
 
 use gpui::{
     App, BorderStyle, Bounds, Context, DismissEvent, DispatchPhase, Element, ElementId, Entity,
     EventEmitter, FocusHandle, Focusable, FontWeight, GlobalElementId, Hitbox, HitboxBehavior,
     Hsla, InspectorElementId, IntoElement, LayoutId, MouseButton, MouseDownEvent, MouseMoveEvent,
-    MouseUpEvent, ParentElement, Pixels, Render, Role, SharedString, Style, Styled, Task,
-    TouchDragEvent, TouchPhase, Window, div, point, prelude::*, px, quad, relative, size,
+    MouseUpEvent, ParentElement, Pixels, Render, Role, ScrollHandle, SharedString, Style, Styled,
+    Task, TouchDragEvent, TouchPhase, Window, div, point, prelude::*, px, quad, relative, size,
 };
 
 use super::{
@@ -36,6 +40,10 @@ pub struct MixerModal {
     queues: HashMap<String, Queue>,
     /// Whether a slider is held, by row.
     held: HashMap<String, Rc<Cell<bool>>>,
+    /// A finger on a slider, by row.
+    fingers: HashMap<String, Rc<RefCell<Option<Finger>>>>,
+    /// The apps' list, which a finger on a slider scrolls up and down.
+    apps: ScrollHandle,
     focus: FocusHandle,
     _load: Task<()>,
 }
@@ -74,6 +82,8 @@ impl MixerModal {
             failure: None,
             queues: HashMap::new(),
             held: HashMap::new(),
+            fingers: HashMap::new(),
+            apps: ScrollHandle::new(),
             focus: cx.focus_handle(),
             _load: load,
         }
@@ -207,6 +217,8 @@ impl MixerModal {
         let (volume, muted) = level;
         let process = key.strip_prefix("app:").map(str::to_owned);
         let held = self.held.entry(key.to_owned()).or_default().clone();
+        let finger = self.fingers.entry(key.to_owned()).or_default().clone();
+        let list = (!whole).then(|| self.apps.clone());
         let entity = cx.entity().downgrade();
         let set = {
             let (entity, process) = (entity.clone(), process.clone());
@@ -318,6 +330,8 @@ impl MixerModal {
                         rest: theme.border,
                         ring: theme.surface_raised,
                         held,
+                        finger,
+                        list,
                         on_change: set,
                     }),
             )
@@ -373,9 +387,12 @@ impl Render for MixerModal {
                         .into_any_element()
                     })
                     .collect();
+                // The apps scroll under the whole volume when they do not fit.
                 div()
                     .flex()
                     .flex_col()
+                    .flex_1()
+                    .min_h_0()
                     .gap(SP_2)
                     .child(whole)
                     .child(
@@ -383,7 +400,10 @@ impl Render for MixerModal {
                             .id("apps")
                             .flex()
                             .flex_col()
+                            .flex_1()
+                            .min_h_0()
                             .overflow_y_scroll()
+                            .track_scroll(&self.apps)
                             .when(apps.is_empty(), |list| {
                                 list.child(
                                     super::widgets::text("音を出しているアプリはありません")
@@ -439,7 +459,44 @@ struct Slider {
     rest: Hsla,
     ring: Hsla,
     held: Rc<Cell<bool>>,
+    /// A finger on the slider, kept across frames by its row.
+    finger: Rc<RefCell<Option<Finger>>>,
+    /// The list the row is in, for a finger that moves up and down.
+    list: Option<ScrollHandle>,
     on_change: OnValue,
+}
+
+/// What a finger on a slider has turned out to do.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Drag {
+    /// It has not moved far enough to tell (a tap, so far).
+    Undecided,
+    Slide,
+    Scroll,
+}
+
+/// How far a finger moves before it is a slide or a scroll.
+const TOUCH_SLOP: f32 = 8.;
+
+/// What a finger that moved by `dx`, `dy` from where it touched does: sideways slides, up and
+/// down scrolls, and too little is still a tap.
+pub fn decide(dx: Pixels, dy: Pixels) -> Drag {
+    let (dx, dy) = (f32::from(dx).abs(), f32::from(dy).abs());
+    if dx.hypot(dy) < TOUCH_SLOP {
+        Drag::Undecided
+    } else if dx >= dy {
+        Drag::Slide
+    } else {
+        Drag::Scroll
+    }
+}
+
+#[derive(Debug, Clone)]
+struct Finger {
+    start: gpui::Point<Pixels>,
+    mode: Drag,
+    /// The list's scroll offset when the finger touched.
+    offset: gpui::Point<Pixels>,
 }
 
 /// What a slider's new value leads to.
@@ -499,6 +556,7 @@ impl Element for Slider {
         window.insert_hitbox(bounds, HitboxBehavior::Normal)
     }
 
+    #[allow(clippy::too_many_lines)] // The groove, the knob, and the mouse's and a finger's ways to move it.
     fn paint(
         &mut self,
         _id: Option<&GlobalElementId>,
@@ -577,8 +635,12 @@ impl Element for Slider {
                 window.release_pointer();
             }
         });
-        let (held, change, touch_hitbox) =
-            (self.held.clone(), self.on_change.clone(), hitbox.clone());
+        let (finger, change, touch_hitbox, list) = (
+            self.finger.clone(),
+            self.on_change.clone(),
+            hitbox.clone(),
+            self.list.clone(),
+        );
         window.on_mouse_event(move |event: &TouchDragEvent, phase, window, cx| {
             if phase != DispatchPhase::Bubble {
                 return;
@@ -587,18 +649,51 @@ impl Element for Slider {
                 TouchPhase::Started
                     if touch_hitbox.is_hovered(window) && !window.default_prevented() =>
                 {
-                    // A finger on the groove slides it rather than scrolling the list.
+                    // The finger is the slider's: sideways it slides, up and down it scrolls
+                    // the list, as a browser's range input with `touch-action: pan-y` did.
                     window.prevent_default();
-                    held.set(true);
-                    change(value_at(event.position.x, left, width), window, cx);
+                    let offset = list.as_ref().map(ScrollHandle::offset).unwrap_or_default();
+                    finger.replace(Some(Finger {
+                        start: event.position,
+                        mode: Drag::Undecided,
+                        offset,
+                    }));
                 }
-                TouchPhase::Moved if held.get() => {
-                    change(value_at(event.position.x, left, width), window, cx);
+                TouchPhase::Moved => {
+                    let Some(mut held) = finger.borrow().clone() else {
+                        return;
+                    };
+                    let (dx, dy) = (
+                        event.position.x - held.start.x,
+                        event.position.y - held.start.y,
+                    );
+                    if held.mode == Drag::Undecided {
+                        held.mode = decide(dx, dy);
+                        finger.replace(Some(held.clone()));
+                    }
+                    match (held.mode, &list) {
+                        (Drag::Slide, _) => {
+                            change(value_at(event.position.x, left, width), window, cx);
+                        }
+                        (Drag::Scroll, Some(list)) => {
+                            let lowest = -list.max_offset().y;
+                            let y = (held.offset.y + dy).clamp(lowest, px(0.));
+                            list.set_offset(point(held.offset.x, y));
+                            window.refresh();
+                        }
+                        _ => {}
+                    }
                 }
-                TouchPhase::Ended | TouchPhase::Cancelled if held.replace(false) => {
-                    change(value_at(event.position.x, left, width), window, cx);
+                TouchPhase::Ended | TouchPhase::Cancelled => {
+                    let Some(held) = finger.take() else { return };
+                    // A tap jumps to where it was; a slide ends where the finger stopped.
+                    match held.mode {
+                        Drag::Undecided => change(value_at(held.start.x, left, width), window, cx),
+                        Drag::Slide => change(value_at(event.position.x, left, width), window, cx),
+                        Drag::Scroll => {}
+                    }
                 }
-                _ => {}
+                TouchPhase::Started => {}
             }
         });
     }
@@ -608,7 +703,15 @@ impl Element for Slider {
 mod tests {
     use gpui::px;
 
-    use super::value_at;
+    use super::{Drag, decide, value_at};
+
+    #[test]
+    fn a_finger_slides_sideways_scrolls_up_and_down_and_taps_otherwise() {
+        assert_eq!(decide(px(3.), px(4.)), Drag::Undecided, "still a tap");
+        assert_eq!(decide(px(-20.), px(6.)), Drag::Slide, "mostly sideways");
+        assert_eq!(decide(px(6.), px(-20.)), Drag::Scroll, "mostly up and down");
+        assert_eq!(decide(px(10.), px(10.)), Drag::Slide, "a tie slides");
+    }
 
     #[test]
     fn a_tap_sets_the_value_under_the_knobs_middle() {

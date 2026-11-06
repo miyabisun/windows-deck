@@ -266,3 +266,30 @@ fn an_apps_mute_button_says_when_the_app_has_no_sound(cx: &mut TestAppContext) {
     click(vcx, "tile-sf6-mute");
     assert!(shows(vcx, "対象のアプリが起動していません"), "why");
 }
+
+#[gpui::test]
+fn a_finger_moving_up_and_down_on_a_slider_scrolls_the_apps(cx: &mut TestAppContext) {
+    let mock = mock();
+    let apps: Vec<_> = (0..20)
+        .map(|i| json!({ "process": format!("App{i}.exe"), "name": format!("App {i}"), "volume": 0.5, "muted": false }))
+        .collect();
+    mock.state().mixer["apps"] = json!(apps);
+    let (_deck, vcx) = open(cx, &mock);
+    click(vcx, "tile-mixer");
+    assert!(has(vcx, "slider-App 2"), "the first apps");
+    let before = super::bounds(vcx, "slider-App 2").unwrap();
+    let at = along(vcx, "App 2", 0.5);
+    super::slide_from(vcx, at, 0., -300.);
+    let after = super::bounds(vcx, "slider-App 2").map(|b| b.top());
+    assert!(
+        after.is_none_or(|top| top < before.top() - px(200.)),
+        "the list scrolled up"
+    );
+    let state = mock.state();
+    let unchanged = state.mixer["apps"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|a| (a["volume"].as_f64().unwrap() - 0.5).abs() < 1e-9);
+    assert!(unchanged, "no volume moved");
+}
