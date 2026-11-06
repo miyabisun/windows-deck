@@ -503,7 +503,7 @@ impl Render for LibraryModal {
                             .flex_none()
                             .child(
                                 Tile {
-                                    key: key.clone().into(),
+                                    key: format!("list-{key}").into(),
                                     label: item.name.clone().into(),
                                     face: Face::Game {
                                         cover: Some(item.image.clone().unwrap_or_else(|| picture_url(&base, &button, &item.id)).into()),
@@ -671,10 +671,10 @@ impl Render for LibraryModal {
                 .bg(theme.danger_subtle)
                 .text_color(theme.danger)
                 .text_size(FS_SM)
-                .child(div().flex_1().child(format!(
+                .child(super::widgets::text(format!(
                     "{} にログインしていません。ログインすると、買ったゲームの一覧とダウンロードが始まります（ログイン画面はメインモニターに開きます）。",
                     shop_name(&shop)
-                )))
+                )).flex_1())
                 .child({
                     let busy = self.signing_in || disabled;
                     super::widgets::outlined_button("sign-in-button", "ログイン", theme.danger, &theme)
@@ -691,7 +691,7 @@ impl Render for LibraryModal {
         let partial = partial_reason(self.library.as_ref().and_then(|l| l.partial.as_deref()));
 
         let content = if let Some(failure) = self.failure.clone() {
-            div().id("library-failure").role(Role::Alert).text_color(theme.danger).child(failure).into_any_element()
+            super::widgets::text(failure).text_color(theme.danger).into_any_element()
         } else if self.library.is_none() {
             div()
                 .flex()
@@ -702,7 +702,7 @@ impl Render for LibraryModal {
                 .child("読み込んでいます…")
                 .into_any_element()
         } else if self.laid_out.0.is_empty() {
-            div().text_color(theme.muted).child("見つかりません").into_any_element()
+            super::widgets::text("見つかりません").text_color(theme.muted).into_any_element()
         } else {
             grid.into_any_element()
         };
@@ -723,9 +723,9 @@ impl Render for LibraryModal {
             .children(chips)
             .when_some(sign_in, |p, s| p.child(s))
             .when(self.library.as_ref().is_some_and(|l| l.sign_in.is_none()), |p| {
-                p.when_some(partial, |p, partial| p.child(div().text_size(FS_SM).text_color(theme.muted).child(partial)))
+                p.when_some(partial, |p, partial| p.child(super::widgets::text(partial).text_size(FS_SM).text_color(theme.muted)))
             })
-            .child(div().id("games").flex_1().min_h_0().child(content))
+            .child(div().id("games").debug_selector(|| "games-area".into()).flex_1().min_h_0().child(content))
             .child(self.notice.render(&theme));
         let menu = self.menu.as_ref().map(|menu| {
             let entity = entity.clone();
@@ -738,7 +738,10 @@ impl Render for LibraryModal {
             }))
         });
         let dialog = self.dialog.as_ref().map(|(view, _, _)| view.clone());
+        // Over the whole panel, with its own menus and dialogs over it.
         div()
+            .absolute()
+            .inset_0()
             .child(modal("library-layer", self.label.clone(), &theme, close, panel))
             .children(menu)
             .children(dialog)

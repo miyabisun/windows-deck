@@ -112,7 +112,8 @@ pub fn long_press(vcx: &mut VisualTestContext, selector: &str) {
     vcx.run_until_parked();
 }
 
-/// A finger sliding from the middle of `selector` by `dx`, `dy`.
+/// A finger sliding from the middle of `selector` by `dx`, `dy`, and resting there before it
+/// lifts (so there is no fling to run on).
 pub fn slide(vcx: &mut VisualTestContext, selector: &str, dx: f32, dy: f32) {
     let start = centre(vcx, selector);
     touch(vcx, TouchPhase::Started, start);
@@ -123,7 +124,10 @@ pub fn slide(vcx: &mut VisualTestContext, selector: &str, dx: f32, dy: f32) {
         vcx.executor().advance_clock(Duration::from_millis(16));
         touch(vcx, TouchPhase::Moved, at);
     }
-    touch(vcx, TouchPhase::Ended, gpui::point(start.x + px(dx), start.y + px(dy)));
+    let end = gpui::point(start.x + px(dx), start.y + px(dy));
+    vcx.executor().advance_clock(Duration::from_millis(300));
+    touch(vcx, TouchPhase::Moved, end);
+    touch(vcx, TouchPhase::Ended, end);
     vcx.run_until_parked();
 }
 

@@ -255,7 +255,15 @@ impl MixerModal {
                     .when(whole, |n| n.font_weight(FontWeight::SEMIBOLD))
                     .child(div().truncate().child(name.clone()))
                     .when(muted, |n| {
-                        n.child(div().text_size(FS_SM).font_weight(FontWeight::NORMAL).text_color(theme.danger).child("ミュート中"))
+                        let selector = name.clone();
+                        n.child(
+                            div()
+                                .debug_selector(move || format!("muted-{selector}"))
+                                .text_size(FS_SM)
+                                .font_weight(FontWeight::NORMAL)
+                                .text_color(theme.danger)
+                                .child("ミュート中"),
+                        )
                     }),
             )
             .child(
@@ -290,7 +298,10 @@ impl MixerModal {
                     .justify_end()
                     .font_family(MONO)
                     .text_size(FS_LABEL)
-                    .child(format!("{}%", percent(volume))),
+                    .child({
+                        let (selector, value) = (name.clone(), percent(volume));
+                        div().debug_selector(move || format!("value-{selector}-{value}")).child(format!("{value}%"))
+                    }),
             )
     }
 }
@@ -325,7 +336,7 @@ impl Render for MixerModal {
                             .flex_col()
                             .overflow_y_scroll()
                             .when(apps.is_empty(), |list| {
-                                list.child(div().text_size(FS_SM).text_color(theme.muted).child("音を出しているアプリはありません"))
+                                list.child(super::widgets::text("音を出しているアプリはありません").text_size(FS_SM).text_color(theme.muted))
                             })
                             .children(apps),
                     )
@@ -355,7 +366,7 @@ impl Render for MixerModal {
             .bg(theme.surface_raised)
             .child(dialog_head("ミキサー", &theme, close.clone()))
             .when_some(self.failure.clone(), |p, f| {
-                p.child(div().id("mixer-failure").role(Role::Alert).text_size(FS_SM).text_color(theme.danger).child(f))
+                p.child(super::widgets::text(f).text_size(FS_SM).text_color(theme.danger))
             })
             .child(body);
         modal("mixer-layer", "ミキサー", &theme, close, panel)

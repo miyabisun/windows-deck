@@ -171,7 +171,7 @@ fn note<T: Into<SharedString>>(text: T, theme: &Theme) -> impl IntoElement + use
         .gap(SP_2)
         .text_size(FS_SM)
         .text_color(theme.muted)
-        .child(text.into())
+        .child(super::widgets::text(text.into()))
 }
 
 fn loading(text: &'static str, theme: &Theme) -> impl IntoElement + use<> {
@@ -195,13 +195,15 @@ fn failure<T: Into<SharedString>>(text: T, theme: &Theme) -> impl IntoElement + 
         .aria_label(text.clone())
         .text_size(FS_SM)
         .text_color(theme.danger)
-        .child(text)
+        .child(super::widgets::text(text))
 }
 
 /// A row to choose (a label's check, a program's mark): as tall as a tab.
 fn choice_row(id: impl Into<gpui::ElementId>, label: SharedString, theme: &Theme) -> gpui::Stateful<gpui::Div> {
+    let selector = label.clone();
     div()
         .id(id)
+        .debug_selector(move || format!("row-{selector}"))
         .aria_label(label)
         .focusable()
         .tab_stop(true)
@@ -446,6 +448,10 @@ impl Render for ProgramChooser {
                     .aria_toggled(on.into())
                     .when(self.busy, |row| row.opacity(0.5))
                     .on_click(cx.listener(move |this, _, _, cx| this.choose(chosen.clone(), cx)))
+                    .when(on, |row| {
+                        let name = program.clone();
+                        row.child(div().absolute().debug_selector(move || format!("on-{name}")))
+                    })
                     .child(mark(on, true, &theme))
                     .child(program)
             }).collect::<Vec<_>>()
@@ -531,7 +537,7 @@ impl Render for KeysDialog {
                                     .flex()
                                     .flex_col()
                                     .child(div().text_size(FS_SM).text_color(theme.muted).child(key.label.clone()))
-                                    .child(div().font_family(MONO).text_size(px(28.)).child(key.value)),
+                                    .child(super::widgets::text(key.value).font_family(MONO).text_size(px(28.))),
                             )
                             .child(
                                 outlined_button(("copy", index), "コピー", theme.accent, &theme)
@@ -704,6 +710,10 @@ impl<H: Host> Render for LabelPicker<H> {
                     .aria_toggled(on.into())
                     .when(locked.is_some(), |row| row.opacity(0.5))
                     .on_click(cx.listener(move |this, _, window, cx| this.toggle(id.clone(), window, cx)))
+                    .when(on, |row| {
+                        let name = label.name.clone();
+                        row.child(div().absolute().debug_selector(move || format!("on-{name}")))
+                    })
                     .child(mark(on, false, &theme))
                     .child(label.name)
                     .when(busy, |row| row.child(spinner(theme.accent)))
@@ -743,6 +753,8 @@ impl<H: Host> Render for LabelPicker<H> {
             .when(self.library.is_none() && self.failure.is_none(), |p| p.child(loading("読み込んでいます…", &theme)))
             .when_some(rows, |p, rows| p.child(div().flex().flex_col().children(rows)));
         div()
+            .absolute()
+            .inset_0()
             .child(modal("labels-layer", "ラベル設定", &theme, close, panel))
             .children(self.ask.clone())
     }
@@ -827,7 +839,7 @@ impl Render for RoundDialog {
                         .gap(SP_2)
                         .text_size(FS_LABEL)
                         .when(summary.busy, |s| s.child(spinner(theme.accent)))
-                        .child(summary.text),
+                        .child(super::widgets::text(summary.text)),
                 )
                 .when_some(summary.failure, |b, f| b.child(failure(f, &theme)))
                 .when(!round.jobs.is_empty(), |b| {
@@ -840,8 +852,8 @@ impl Render for RoundDialog {
                             .min_h(ROW_HEIGHT)
                             .border_t_1()
                             .border_color(theme.border)
-                            .child(div().flex_1().min_w_0().truncate().child(job.name))
-                            .child(div().text_size(FS_SM).text_color(if failed { theme.danger } else { theme.muted }).child(job.status))
+                            .child(div().flex_1().min_w_0().truncate().child(super::widgets::text(job.name)))
+                            .child(super::widgets::text(job.status).text_size(FS_SM).text_color(if failed { theme.danger } else { theme.muted }))
                     })))
                 })
                 .into_any_element()

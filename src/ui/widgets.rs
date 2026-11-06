@@ -278,6 +278,7 @@ pub fn modal<I: Into<ElementId>, L: Into<SharedString>>(
 pub fn close_button(theme: &Theme, close: Rc<dyn Fn(&mut Window, &mut App)>) -> Stateful<Div> {
     div()
         .id("close")
+        .debug_selector(|| "close".into())
         .role(Role::Button)
         .aria_label("閉じる")
         .focusable()
@@ -324,8 +325,10 @@ pub fn outlined_button(
     theme: &Theme,
 ) -> Stateful<Div> {
     let label = label.into();
+    let selector = label.clone();
     div()
         .id(id)
+        .debug_selector(move || format!("button-{selector}"))
         .role(Role::Button)
         .aria_label(label.clone())
         .focusable()
