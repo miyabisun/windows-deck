@@ -4,8 +4,8 @@ A Stream Deck style touch panel for Windows. It fills a monitor (meant for a sma
 monitor in front of the mouse) with large buttons and presses them on
 [windows-link](https://github.com/miyabisun/windows-link), the resident server that does
 the actual work: switching the audio output, toggling an application's volume and so on.
-The panel is a single native process drawn with [GPUI](https://www.gpui.rs/), the UI
-framework of the Zed editor, so it stays small while it runs all day.
+The panel is drawn with [GPUI](https://www.gpui.rs/), the UI framework of the Zed editor.
+It runs as one process, without a browser engine.
 
 The panel holds no button definitions of its own. It shows the buttons windows-link has,
 in their order, with their current state, and follows changes through windows-link's
@@ -115,8 +115,8 @@ FANZA sign-in, the button says **ログインが必要です** and the list offe
 login window of the panel's own on the primary monitor (shown on every virtual desktop),
 where you sign in to DMM yourself. Once the window reaches FANZA's library it closes and
 hands DMM's cookies to windows-link (needs windows-link 0.1.21 or later), which then lists
-and downloads the games. The login window is a browser (WebView2) in a process of its own,
-started only for the sign-in and gone once it closes. DLsite signs in the same way (needs windows-link 0.1.42 or later):
+and downloads the games. The login window is a WebView2 browser in a process of its own.
+That process starts for the sign-in and ends when its window closes. DLsite signs in the same way (needs windows-link 0.1.42 or later):
 its window opens DLsite Play, where you pass DLsite's check and sign in yourself, and
 closes once DLsite Play shows, handing DLsite's cookies to windows-link.
 
@@ -255,9 +255,9 @@ cargo clippy --all-targets --locked -- -D warnings
 cargo test --locked
 ```
 
-These are every check: formatting, Clippy and the tests. The tests include the panel's
-screens, driven in GPUI's test context against a stand-in for windows-link
-(`src/link/mock.rs`), so they need no windows-link, Steam or audio devices. There is no CI
+These are every check: formatting, Clippy and the tests. The tests also drive the panel's
+screens in GPUI's test context. A stand-in for windows-link (`src/link/mock.rs`) answers
+them, so they need no windows-link, Steam or audio devices. There is no CI
 that tests: the `pre-push` hook in `.githooks` runs the checks before `main` or a release
 tag is pushed, and refuses the push when anything fails (or when the commit being pushed is
 not the clean working tree). Other branches are pushed without it. GitHub Actions only
