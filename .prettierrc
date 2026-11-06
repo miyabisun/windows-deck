@@ -1,5 +1,0 @@
-{
-  "plugins": ["prettier-plugin-svelte"],
-  "printWidth": 100,
-  "endOfLine": "auto"
-}

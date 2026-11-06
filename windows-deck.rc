@@ -1,0 +1,2 @@
+// The exe icon. GPUI shows resource 1 on its windows; its own build embeds the manifest.
+1 ICON "icons/icon.ico"
