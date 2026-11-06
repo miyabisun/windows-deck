@@ -59,6 +59,7 @@ pub fn run(version: &str) {
         .with_http_client(Arc::new(Pictures::default()))
         .run(move |cx: &mut App| {
             cx.set_global(Theme::for_appearance(cx.window_appearance()));
+            cx.set_reduce_motion(platform::reduced_motion());
             ui::bind_keys(cx);
             let loaded = config::load(&config::default_path());
             let link = connect(&loaded.link, cx);

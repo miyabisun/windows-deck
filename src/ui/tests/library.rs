@@ -567,3 +567,38 @@ fn a_shops_update_starts_its_downloads_and_shows_how_they_go(cx: &mut TestAppCon
     assert_eq!(mock.state().updates, ["dlsite"]);
     assert!(shows(vcx, "更新の状況: DLsite"), "its round opens");
 }
+
+#[gpui::test]
+fn the_mouse_held_down_opens_the_menu_and_does_not_start(cx: &mut TestAppContext) {
+    let mock = mock();
+    let (_deck, vcx) = open(cx, &mock);
+    click(vcx, "tile-games");
+    let at = super::bounds(vcx, &game("646570")).unwrap().center();
+    let modifiers = Modifiers::none();
+    vcx.simulate_event(MouseDownEvent {
+        button: MouseButton::Left,
+        position: at,
+        modifiers,
+        click_count: 1,
+        first_mouse: false,
+    });
+    vcx.executor()
+        .advance_clock(std::time::Duration::from_millis(600));
+    vcx.run_until_parked();
+    vcx.simulate_event(MouseUpEvent {
+        button: MouseButton::Left,
+        position: at,
+        modifiers,
+        click_count: 1,
+    });
+    vcx.run_until_parked();
+    assert!(has(vcx, "menu-TOPに固定"), "the menu");
+    assert!(
+        mock.state().started.is_empty(),
+        "the release did not start the game"
+    );
+    keys(vcx, "escape");
+    // A short click still starts it.
+    click(vcx, &game("646570"));
+    assert_eq!(mock.state().started, ["646570"]);
+}

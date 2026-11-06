@@ -103,20 +103,17 @@ pub fn glyph(glyph: Glyph, size: Pixels, color: Hsla) -> Svg {
         .text_color(color)
 }
 
-/// The 18px spinner in the accent colour; it stops turning when Windows asks for less motion.
+/// The 18px spinner in the accent colour. GPUI keeps it still when the app is set to reduce
+/// motion (as Windows' animation setting asks, read at startup).
 pub fn spinner(color: Hsla) -> impl IntoElement {
-    let icon = svg()
+    svg()
         .path("spinner.svg")
         .size(gpui::px(18.))
         .flex_none()
-        .text_color(color);
-    if crate::platform::reduced_motion() {
-        return icon.into_any_element();
-    }
-    icon.with_animation(
-        "spinner",
-        Animation::new(Duration::from_millis(800)).repeat(),
-        |icon, delta| icon.with_transformation(Transformation::rotate(percentage(delta))),
-    )
-    .into_any_element()
+        .text_color(color)
+        .with_animation(
+            "spinner",
+            Animation::new(Duration::from_millis(800)).repeat(),
+            |icon, delta| icon.with_transformation(Transformation::rotate(percentage(delta))),
+        )
 }

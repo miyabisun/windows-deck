@@ -16,38 +16,28 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v7
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: npm
-
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@1.96.0
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri
 
-      - name: Check that the tag matches package.json
+      - name: Check that the tag matches Cargo.toml
         shell: pwsh
         run: |
-          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $version = (cargo metadata --no-deps --format-version 1 | ConvertFrom-Json).packages[0].version
           if ("v$version" -ne $env:GITHUB_REF_NAME) {
-            throw "tag $env:GITHUB_REF_NAME does not match package.json version $version"
+            throw "tag $env:GITHUB_REF_NAME does not match Cargo.toml version $version"
           }
 
       - name: Build the app
-        run: |
-          npm ci
-          npm run tauri build -- --no-bundle
+        run: cargo build --release --locked
 
       - name: Package the exe and its SHA-256
         shell: pwsh
         run: |
           New-Item -ItemType Directory dist-release | Out-Null
-          Copy-Item src-tauri\target\release\windows-deck.exe "dist-release\$env:ASSET"
+          Copy-Item target\release\windows-deck.exe "dist-release\$env:ASSET"
           $hash = (Get-FileHash "dist-release\$env:ASSET" -Algorithm SHA256).Hash.ToLowerInvariant()
           [IO.File]::WriteAllText("$PWD\dist-release\$env:ASSET.sha256", "$hash  $env:ASSET`n")
           Get-Content "dist-release\$env:ASSET.sha256"

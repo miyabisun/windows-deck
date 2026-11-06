@@ -670,6 +670,8 @@ impl Render for LibraryModal {
         .size_full();
 
         let search = self.search.clone();
+        // The field shows that it has the focus, as the browser's outline did.
+        let searching = search.read(cx).focus_handle(cx).is_focused(window);
         let first = self.shown(cx).first().cloned();
         let head = div()
             .flex()
@@ -685,7 +687,11 @@ impl Render for LibraryModal {
                     .h(CONTROL_HEIGHT)
                     .px(SP_4)
                     .border_1()
-                    .border_color(theme.border)
+                    .border_color(if searching {
+                        theme.accent
+                    } else {
+                        theme.border
+                    })
                     .rounded(RADIUS_MD)
                     .bg(theme.surface_raised)
                     .text_size(FS_LABEL)

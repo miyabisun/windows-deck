@@ -1,7 +1,11 @@
 //! The parts every screen shares: toasts, long-press menus, the long press itself, dialogs'
 //! frames and buttons.
 
-use std::{cell::Cell, rc::Rc, time::Duration};
+use std::{
+    cell::{Cell, RefCell},
+    rc::Rc,
+    time::Duration,
+};
 
 use gpui::{
     AnyElement, App, Bounds, Context, DispatchPhase, Div, Element, ElementId, FontWeight,
@@ -398,6 +402,20 @@ pub fn outlined_button(
 /// What a long press opens, at the given point.
 pub type OnLong = Rc<dyn Fn(Point<Pixels>, &mut Window, &mut App)>;
 
+/// How long a finger or the mouse button must stay down.
+const LONG_PRESS: Duration = Duration::from_millis(500);
+/// How far the mouse may move meanwhile, so that a drag is no long press.
+const SLOP: f32 = 10.;
+
+/// A left button press that may become a long press.
+#[derive(Default)]
+struct MouseHold {
+    origin: Point<Pixels>,
+    armed: bool,
+    fired: bool,
+    timer: Option<Task<()>>,
+}
+
 /// Wrap `child` so that a long press of a finger (or the right button) calls `on_long` with
 /// where it was; the press that opens the menu does not also tap. `centre` receives the
 /// middle of the child, for the menu key.
@@ -474,7 +492,7 @@ impl Element for LongPress {
 
     fn paint(
         &mut self,
-        _id: Option<&GlobalElementId>,
+        id: Option<&GlobalElementId>,
         _inspector_id: Option<&InspectorElementId>,
         bounds: Bounds<Pixels>,
         _request_layout: &mut Self::RequestLayoutState,
@@ -483,7 +501,8 @@ impl Element for LongPress {
         cx: &mut App,
     ) {
         self.child.paint(window, cx);
-        let (Some(hitbox), Some(on_long)) = (hitbox.take(), self.on_long.clone()) else {
+        let (Some(hitbox), Some(on_long), Some(id)) = (hitbox.take(), self.on_long.clone(), id)
+        else {
             return;
         };
         let touch = on_long.clone();
@@ -500,14 +519,69 @@ impl Element for LongPress {
             cx.stop_propagation();
             touch(event.start_position, window, cx);
         });
-        let right = on_long.clone();
+        // The mouse's left button held still opens the menu too; the release that follows is
+        // no click. The press outlives frames, so it is kept with the element.
+        let held = window.with_element_state(id, |state: Option<Rc<RefCell<MouseHold>>>, _| {
+            let state = state.unwrap_or_default();
+            (state.clone(), state)
+        });
+        let (down, down_hitbox, mouse) = (held.clone(), hitbox.clone(), on_long.clone());
         window.on_mouse_event(move |event: &gpui::MouseDownEvent, phase, window, cx| {
-            if phase == DispatchPhase::Bubble
-                && event.button == MouseButton::Right
-                && hitbox.is_hovered(window)
-            {
+            if phase != DispatchPhase::Bubble || !down_hitbox.is_hovered(window) {
+                return;
+            }
+            if event.button == MouseButton::Right {
                 cx.stop_propagation();
-                right(event.position, window, cx);
+                mouse(event.position, window, cx);
+                return;
+            }
+            if event.button != MouseButton::Left {
+                return;
+            }
+            let (state, open, at) = (down.clone(), mouse.clone(), event.position);
+            let timer = window.spawn(cx, async move |cx| {
+                cx.background_executor().timer(LONG_PRESS).await;
+                let fire = state.borrow().armed;
+                if fire {
+                    {
+                        let mut state = state.borrow_mut();
+                        state.armed = false;
+                        state.fired = true;
+                    }
+                    let _ = cx.update(|window, cx| open(at, window, cx));
+                }
+            });
+            *down.borrow_mut() = MouseHold {
+                origin: at,
+                armed: true,
+                fired: false,
+                timer: Some(timer),
+            };
+        });
+        let moved = held.clone();
+        window.on_mouse_event(move |event: &gpui::MouseMoveEvent, phase, _, _| {
+            let mut state = moved.borrow_mut();
+            if phase == DispatchPhase::Bubble && state.armed {
+                let (dx, dy) = (
+                    event.position.x - state.origin.x,
+                    event.position.y - state.origin.y,
+                );
+                if f32::from(dx).hypot(f32::from(dy)) > SLOP {
+                    state.armed = false;
+                    state.timer = None;
+                }
+            }
+        });
+        window.on_mouse_event(move |event: &gpui::MouseUpEvent, phase, _, cx| {
+            if phase != DispatchPhase::Capture || event.button != MouseButton::Left {
+                return;
+            }
+            let mut state = held.borrow_mut();
+            state.armed = false;
+            state.timer = None;
+            if std::mem::take(&mut state.fired) {
+                // The press opened the menu; it does not also press.
+                cx.stop_propagation();
             }
         });
         self.centre.set(point(

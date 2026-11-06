@@ -29,8 +29,13 @@ pub const FS_STATE: Pixels = px(24.);
 
 /// Windows' Japanese UI font, for the `system-ui` of the design.
 pub const FONT: &str = "Yu Gothic UI";
-/// For license keys and volume figures.
+/// For license keys.
 pub const MONO: &str = "Consolas";
+
+/// Figures of the same width, so that a changing value does not jump (`tabular-nums`).
+pub fn tabular() -> gpui::FontFeatures {
+    gpui::FontFeatures(std::sync::Arc::new(vec![("tnum".into(), 1)]))
+}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Theme {
@@ -85,8 +90,16 @@ impl Theme {
         }
     }
 
-    /// The theme Windows asks for.
+    /// The theme Windows asks for. A debug build can be told one with
+    /// `WINDOWS_DECK_APPEARANCE=light` or `dark`, to look at both.
     pub fn for_appearance(appearance: WindowAppearance) -> Self {
+        if cfg!(debug_assertions) {
+            match std::env::var("WINDOWS_DECK_APPEARANCE").as_deref() {
+                Ok("light") => return Self::kinari(),
+                Ok("dark") => return Self::sumi(),
+                _ => {}
+            }
+        }
         match appearance {
             WindowAppearance::Light | WindowAppearance::VibrantLight => Self::kinari(),
             WindowAppearance::Dark | WindowAppearance::VibrantDark => Self::sumi(),

@@ -13,7 +13,7 @@ use gpui::{
 
 use super::{
     icons::{glyph, spinner},
-    theme::{FS_LABEL, FS_SM, MONO, ROW_HEIGHT, SP_2, SP_4, Theme},
+    theme::{FS_LABEL, FS_SM, ROW_HEIGHT, SP_2, SP_4, Theme},
     widgets::{Act, dialog_head, modal},
 };
 use crate::{
@@ -317,7 +317,7 @@ impl MixerModal {
                     .flex_none()
                     .flex()
                     .justify_end()
-                    .font_family(MONO)
+                    .font_features(super::theme::tabular())
                     .text_size(FS_LABEL)
                     .child({
                         let (selector, value) = (name.clone(), percent(volume));

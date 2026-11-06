@@ -329,3 +329,31 @@ fn buttons_with_an_icon_show_it(cx: &mut TestAppContext) {
     );
     assert!(has(vcx, "tile-sf6-volume"), "shown");
 }
+
+#[gpui::test]
+fn a_finger_swipes_the_tab_row_sideways_when_the_tabs_do_not_fit(cx: &mut TestAppContext) {
+    let mock = MockLink::default();
+    let many: Vec<Value> = (0..30)
+        .map(|index| json!({ "id": format!("GUID-{index}"), "name": format!("デスクトップ {index}"), "index": index, "current": index == 0 }))
+        .collect();
+    mock.state().desktops = Value::Array(many);
+    let (_deck, vcx) = open(cx, &mock);
+    let last = "desktop-デスクトップ 29";
+    let start = super::bounds(vcx, last).expect("laid out");
+    assert!(
+        start.left() > gpui::px(1920.),
+        "the last tab starts out of sight"
+    );
+    super::slide(vcx, "desktop-デスクトップ 3", -1500., 0.);
+    let after = super::bounds(vcx, last).unwrap();
+    assert!(
+        after.left() < start.left() - gpui::px(1000.),
+        "the row moved with the finger"
+    );
+    // The page itself does not move sideways.
+    assert_eq!(
+        super::bounds(vcx, "tile-output").unwrap().left(),
+        gpui::px(16.)
+    );
+    assert!(mock.state().switches.is_empty(), "a swipe switches nothing");
+}

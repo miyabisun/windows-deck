@@ -1,6 +1,7 @@
 #!/bin/sh
 # The gate before main or a release tag reaches GitHub: every check must pass
-# (npm run verify). GitHub Actions only builds releases, so nothing else tests.
+# (rustfmt, Clippy and the tests). GitHub Actions only builds releases, so nothing
+# else tests.
 # Other branches are pushed without checks. Enable once per clone:
 #   git config core.hooksPath .githooks
 
@@ -27,9 +28,11 @@ if [ "$(git rev-parse HEAD)" != "$pushed" ] || [ -n "$(git status --porcelain)" 
   echo "pre-push: check out $pushed with a clean working tree so it can be verified" >&2
   exit 1
 fi
-if ! command -v npm >/dev/null 2>&1; then
-  echo "pre-push: npm is not on PATH; install Node.js 24 to run the checks" >&2
+if ! command -v cargo >/dev/null 2>&1; then
+  echo "pre-push: cargo is not on PATH; install Rust (rustup) to run the checks" >&2
   exit 1
 fi
-npm run verify || exit 1
+cargo fmt --check || exit 1
+cargo clippy --all-targets --locked -- -D warnings || exit 1
+cargo test --locked || exit 1
 echo "$pushed" >"$mark"
