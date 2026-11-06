@@ -278,7 +278,13 @@ impl LibraryModal {
         self.ask(ask, window, cx);
     }
 
-    fn label_menu(&mut self, label: Label, at: Point<Pixels>, cx: &mut Context<Self>) {
+    fn show_menu(&mut self, menu: Menu, window: &mut Window, cx: &mut Context<Self>) {
+        window.focus(&menu.focus, cx);
+        self.menu = Some(menu);
+        cx.notify();
+    }
+
+    fn label_menu(&mut self, label: Label, at: Point<Pixels>, window: &mut Window, cx: &mut Context<Self>) {
         let fixed = !label.editable || self.locked().is_some();
         let this = cx.entity().downgrade();
         let rename = {
@@ -329,11 +335,11 @@ impl LibraryModal {
             })
             .disabled(fixed)
         };
-        self.menu = Some(Menu::new(at, label.name, vec![rename, delete]));
-        cx.notify();
+        let menu = Menu::new(at, label.name, vec![rename, delete], cx);
+        self.show_menu(menu, window, cx);
     }
 
-    fn order_menu(&mut self, at: Point<Pixels>, cx: &mut Context<Self>) {
+    fn order_menu(&mut self, at: Point<Pixels>, window: &mut Window, cx: &mut Context<Self>) {
         let current = self.order(cx);
         let offered = self.library.as_ref().map(|l| orders_of(&l.items)).unwrap_or_default();
         let items = offered
@@ -351,8 +357,8 @@ impl LibraryModal {
                 .checked(order == current)
             })
             .collect();
-        self.menu = Some(Menu::new(at, "並び順", items));
-        cx.notify();
+        let menu = Menu::new(at, "並び順", items, cx);
+        self.show_menu(menu, window, cx);
     }
 
     fn note_of(&self, item: &Item, order: Order, pinned: &[String]) -> Option<String> {
@@ -480,7 +486,7 @@ impl Render for LibraryModal {
                         };
                         let on_long = {
                             let (entity, item, link, button, pinned) = (entity.clone(), item.clone(), link_handle.clone(), button.clone(), pinned_ids.clone());
-                            Rc::new(move |at: Point<Pixels>, _: &mut Window, cx: &mut App| {
+                            Rc::new(move |at: Point<Pixels>, window: &mut Window, cx: &mut App| {
                                 let game = MenuGame {
                                     id: item.id.clone(),
                                     name: item.name.clone(),
@@ -489,10 +495,7 @@ impl Render for LibraryModal {
                                     page: Some(item.page.is_some()),
                                 };
                                 let menu = game_menu(entity.clone(), &link, &button, game, pinned.contains(&item.id), at, cx);
-                                let _ = entity.update(cx, |this, cx| {
-                                    this.menu = Some(menu);
-                                    cx.notify();
-                                });
+                                let _ = entity.update(cx, |this, cx| this.show_menu(menu, window, cx));
                             }) as super::widgets::OnLong
                         };
                         div()
@@ -584,7 +587,7 @@ impl Render for LibraryModal {
                                 gpui::ClickEvent::Mouse(click) => click.up.position,
                                 _ => window.mouse_position(),
                             };
-                            this.order_menu(at, cx);
+                            this.order_menu(at, window, cx);
                         })),
                 )
             })
@@ -618,8 +621,8 @@ impl Render for LibraryModal {
                 }
                 let on_long = {
                     let (entity, label) = (entity.clone(), label.clone());
-                    Rc::new(move |at: Point<Pixels>, _: &mut Window, cx: &mut App| {
-                        let _ = entity.update(cx, |this, cx| this.label_menu(label.clone(), at, cx));
+                    Rc::new(move |at: Point<Pixels>, window: &mut Window, cx: &mut App| {
+                        let _ = entity.update(cx, |this, cx| this.label_menu(label.clone(), at, window, cx));
                     }) as super::widgets::OnLong
                 };
                 chips.push(
@@ -726,9 +729,10 @@ impl Render for LibraryModal {
             .child(self.notice.render(&theme));
         let menu = self.menu.as_ref().map(|menu| {
             let entity = entity.clone();
-            menu.render(&theme, Rc::new(move |_, cx| {
+            menu.render(&theme, Rc::new(move |window, cx| {
                 let _ = entity.update(cx, |this, cx| {
                     this.menu = None;
+                    window.focus(&this.search.read(cx).focus_handle(cx), cx);
                     cx.notify();
                 });
             }))

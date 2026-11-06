@@ -3,6 +3,8 @@
 //! failure stays where the panel shows it until the next try.
 
 pub mod http;
+#[cfg(test)]
+pub mod mock;
 
 use std::{
     collections::{HashMap, HashSet},

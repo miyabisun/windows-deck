@@ -147,7 +147,7 @@ pub fn game_menu<H: Host>(
             });
         }));
     }
-    Menu::new(at, game.name, items)
+    Menu::new(at, game.name, items, cx)
 }
 
 /// Keep why a request about a game failed on its tile.

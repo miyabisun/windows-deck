@@ -10,6 +10,9 @@ pub mod theme;
 pub mod tile;
 pub mod widgets;
 
+#[cfg(test)]
+mod tests;
+
 use gpui::{App, KeyBinding, actions};
 
 actions!(deck, [FocusNext, FocusPrev]);

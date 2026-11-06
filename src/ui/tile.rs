@@ -91,10 +91,11 @@ impl Tile {
             .font_weight(FontWeight::SEMIBOLD)
             .line_height(gpui::relative(1.3))
             .line_clamp(2)
-            .child(self.label.clone());
+            .child(super::widgets::text(self.label.clone()));
+        let key = self.key.clone();
         let mut tile = div()
             .id(SharedString::from(format!("tile-{}", self.key)))
-            .debug_selector(|| format!("tile-{}", self.key))
+            .debug_selector(move || format!("tile-{key}"))
             .role(Role::Button)
             .aria_label(self.label.clone())
             .relative()
@@ -152,7 +153,7 @@ impl Tile {
                         .font_weight(FontWeight::SEMIBOLD)
                         .line_height(gpui::relative(1.25))
                         .line_clamp(2)
-                        .child(shown.text),
+                        .child(super::widgets::text(shown.text)),
                 ),
             Face::Game { cover, whole, .. } => {
                 let height = self.width * (215. / 460.);
@@ -176,9 +177,16 @@ impl Tile {
                     .text_size(FS_SM)
                     .line_height(gpui::relative(1.5))
                     .text_color(if failed { theme.danger } else { theme.muted })
-                    .child(note),
+                    .child(super::widgets::text(note)),
             )
         });
+        // What the tests read of the tile's state.
+        for (on, what) in [(self.pending, "busy"), (failed, "failed"), (self.disabled, "disabled")] {
+            if on {
+                let key = self.key.clone();
+                tile = tile.child(div().absolute().debug_selector(move || format!("{what}-{key}")));
+            }
+        }
         if self.pending {
             tile = tile.child(
                 div()

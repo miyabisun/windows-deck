@@ -19,6 +19,13 @@ use super::{
 };
 use crate::model::display::Glyph;
 
+/// A piece of text that the panel's tests can find (`text:<the text>`).
+pub fn text(text: impl Into<SharedString>) -> Div {
+    let text = text.into();
+    let selector = text.clone();
+    div().debug_selector(move || format!("text:{selector}")).child(text)
+}
+
 /// What a toast says, for a few seconds after each `show`.
 #[derive(Default)]
 pub struct Notice {
@@ -70,7 +77,7 @@ impl Notice {
                     .bg(theme.surface_raised)
                     .shadow(shadow())
                     .text_size(FS_MD)
-                    .child(text)
+                    .child(self::text(text))
             }))
     }
 }
@@ -110,14 +117,17 @@ pub struct Menu {
     pub at: Point<Pixels>,
     pub title: SharedString,
     pub items: Vec<MenuItem>,
+    /// Held while the menu is open, so that Esc and Tab stay in it.
+    pub focus: gpui::FocusHandle,
 }
 
 impl Menu {
-    pub fn new(at: Point<Pixels>, title: impl Into<SharedString>, items: Vec<MenuItem>) -> Self {
+    pub fn new(at: Point<Pixels>, title: impl Into<SharedString>, items: Vec<MenuItem>, cx: &App) -> Self {
         Self {
             at,
             title: title.into(),
             items,
+            focus: cx.focus_handle(),
         }
     }
 
@@ -127,8 +137,10 @@ impl Menu {
         let items = self.items.iter().enumerate().map(|(index, item)| {
             let action = item.action.clone();
             let close = close.clone();
+            let label = item.label.clone();
             let row = div()
                 .id(("menu-item", index))
+                .debug_selector(move || format!("menu-{label}"))
                 .role(if item.checked.is_some() { Role::RadioButton } else { Role::MenuItem })
                 .aria_label(item.label.clone())
                 .flex()
@@ -139,14 +151,18 @@ impl Menu {
                 .text_size(FS_LABEL)
                 .when_some(item.checked, |row, checked| {
                     row.aria_toggled(checked.into())
-                        .when(checked, |row| row.font_weight(FontWeight::SEMIBOLD))
+                        .when(checked, |row| {
+                            let label = item.label.clone();
+                            row.font_weight(FontWeight::SEMIBOLD).debug_selector(move || format!("checked-{label}"))
+                        })
                         .child(div().w(px(24.)).flex_none().when(checked, |mark| {
                             mark.child(glyph(Glyph::Check, px(24.), theme.accent))
                         }))
                 })
                 .child(item.label.clone());
             if item.disabled {
-                row.opacity(0.5).into_any_element()
+                let label = item.label.clone();
+                row.opacity(0.5).debug_selector(move || format!("disabled-{label}")).into_any_element()
             } else {
                 row.focusable()
                     .tab_stop(true)
@@ -163,6 +179,7 @@ impl Menu {
         deferred(
             div()
                 .id("menu-layer")
+                .track_focus(&self.focus)
                 .absolute()
                 .inset_0()
                 .occlude()
@@ -294,7 +311,7 @@ pub fn dialog_head<T: Into<SharedString>>(
                 .text_size(FS_LABEL)
                 .font_weight(FontWeight::SEMIBOLD)
                 .truncate()
-                .child(title.into()),
+                .child(text(title.into())),
         )
         .child(close_button(theme, close))
 }
