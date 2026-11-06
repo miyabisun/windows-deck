@@ -1,9 +1,14 @@
 //! A Stream Deck style touch panel for windows-link's buttons, drawn with GPUI.
 
+pub mod app;
 pub mod config;
 pub mod link;
 pub mod logging;
+pub mod login;
 pub mod model;
+pub mod pictures;
+pub mod platform;
+pub mod ui;
 pub mod update;
 
 use std::time::Duration;

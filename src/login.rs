@@ -1,15 +1,35 @@
-//! Signing in to a shop (FANZA, DLsite): a private window where the user logs in by hand
-//! (the shops' bot checks pass in a real browser). Its cookies go to windows-link, which
+//! Signing in to a shop (FANZA, DLsite): a private browser window where the user logs in by
+//! hand (the shops' bot checks pass in a real browser). Its cookies go to windows-link, which
 //! keeps the session from then on; the window keeps none.
+//!
+//! The window runs in a process of its own (`windows-deck --login <shop> --link <url>`), so the
+//! panel itself never loads WebView2: the process prints the cookies, or why there are none,
+//! as one line of JSON and exits.
 
-use std::sync::{Mutex, mpsc};
+use std::{
+    io::Write,
+    path::PathBuf,
+    process::{Command, Stdio},
+    sync::{Arc, Mutex},
+};
 
 use serde::Serialize;
-use tauri::{
-    AppHandle, Manager, Url, WebviewUrl, WebviewWindowBuilder, WindowEvent,
-    webview::{Cookie, PageLoadEvent},
+use serde_json::{Value, json};
+use tao::{
+    event::{Event, WindowEvent},
+    event_loop::{ControlFlow, EventLoopBuilder},
+    window::WindowBuilder,
 };
 use tracing::info;
+use url::Url;
+use wry::{PageLoadEvent, WebContext, WebViewBuilder, cookie::Cookie};
+
+use crate::{link::SignIn, model::protocol::ErrorBody};
+
+/// The argument that makes the exe a shop's login window.
+pub const LOGIN: &str = "--login";
+/// windows-link's URL, for the login window to be shown on every desktop.
+pub const LINK: &str = "--link";
 
 /// What differs between the shops' login windows.
 pub struct Shop {
@@ -83,109 +103,154 @@ pub fn session_cookie(cookie: &Cookie<'_>, site: &str) -> Option<SessionCookie> 
         value: cookie.value().to_owned(),
         domain: domain.to_owned(),
         path: cookie.path().unwrap_or("/").to_owned(),
-        expires: cookie
-            .expires_datetime()
-            .map(tauri::webview::cookie::time::OffsetDateTime::unix_timestamp),
+        expires: cookie.expires_datetime().map(|at| at.unix_timestamp()),
         secure: cookie.secure().unwrap_or(false),
         http_only: cookie.http_only().unwrap_or(false),
     })
 }
 
-/// Show a window on every virtual desktop through windows-link at `link` (a new window
-/// of the panel may otherwise stay hidden on another desktop), and bring it forward.
-async fn pin(window: &tauri::WebviewWindow, link: &str) {
-    // The handle itself cannot wait across threads; its number can.
-    let handle = window.hwnd().map(|hwnd| hwnd.0 as isize);
+/// Where WebView2 keeps its files: the folder the Tauri panel used, so none is added.
+fn data_directory() -> Option<PathBuf> {
+    let base = std::env::var_os("LOCALAPPDATA")?;
+    Some(PathBuf::from(base).join("io.github.miyabisun.windows-deck").join("EBWebView"))
+}
+
+enum Signal {
+    SignedIn,
+}
+
+/// The login window's process: open `shop`'s login, wait until the user has signed in (or
+/// closed the window), print the cookies or why not, and return the exit code.
+pub fn run(shop: &str, link: &str) -> i32 {
+    let Some(shop) = self::shop(shop) else {
+        return answer(&json!({ "error": "window", "message": format!("{shop} has no login window") }));
+    };
+    let event_loop = EventLoopBuilder::<Signal>::with_user_event().build();
+    let window = match WindowBuilder::new()
+        .with_title(shop.title)
+        .with_inner_size(tao::dpi::LogicalSize::new(1000.0, 820.0))
+        .build(&event_loop)
+    {
+        Ok(window) => window,
+        Err(err) => return answer(&json!({ "error": "window", "message": err.to_string() })),
+    };
+    if let Some(monitor) = window.primary_monitor() {
+        let size = window.outer_size();
+        let area = monitor.size();
+        let at = monitor.position();
+        let half = |whole: u32, part: u32| (i32::try_from(whole).unwrap_or(0) - i32::try_from(part).unwrap_or(0)) / 2;
+        window.set_outer_position(tao::dpi::PhysicalPosition::new(
+            at.x + half(area.width, size.width),
+            at.y + half(area.height, size.height),
+        ));
+    }
+    let proxy = event_loop.create_proxy();
+    let signed_in = shop.signed_in;
+    let mut context = WebContext::new(data_directory());
+    let webview = match WebViewBuilder::new_with_web_context(&mut context)
+        .with_url(shop.start)
+        .with_incognito(true)
+        .with_on_page_load_handler(move |event, url| {
+            if matches!(event, PageLoadEvent::Finished) && Url::parse(&url).is_ok_and(|url| signed_in(&url)) {
+                let _ = proxy.send_event(Signal::SignedIn);
+            }
+        })
+        .build(&window)
+    {
+        Ok(webview) => webview,
+        Err(err) => return answer(&json!({ "error": "window", "message": err.to_string() })),
+    };
+    pin(&window, link);
+    let site = shop.site;
+    let code = Arc::new(Mutex::new(0));
+    let exit = code.clone();
+    event_loop.run(move |event, _, flow| {
+        *flow = ControlFlow::Wait;
+        let finish = |value: &Value, flow: &mut ControlFlow| {
+            let code = answer(value);
+            *exit.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = code;
+            *flow = ControlFlow::ExitWithCode(code);
+        };
+        match event {
+            Event::UserEvent(Signal::SignedIn) => match webview.cookies() {
+                Ok(cookies) => {
+                    let cookies: Vec<SessionCookie> =
+                        cookies.iter().filter_map(|cookie| session_cookie(cookie, site)).collect();
+                    info!(site, cookies = cookies.len(), "signed in to a shop");
+                    finish(&json!({ "cookies": cookies }), flow);
+                }
+                Err(err) => finish(&json!({ "error": "window", "message": err.to_string() }), flow),
+            },
+            Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => {
+                finish(&json!({ "error": "closed" }), flow);
+            }
+            _ => {}
+        }
+    })
+}
+
+/// Show the window on every virtual desktop through windows-link at `link` (a new window may
+/// otherwise stay on another desktop), and bring it forward.
+fn pin(window: &tao::window::Window, link: &str) {
+    use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+    let handle = window.window_handle().ok().and_then(|h| match h.as_raw() {
+        RawWindowHandle::Win32(h) => Some(h.hwnd.get()),
+        _ => None,
+    });
     match handle {
-        Ok(handle) => {
-            let url = format!("{link}/windows/{handle}/pin");
-            let pinned =
-                tauri::async_runtime::spawn_blocking(move || ureq::post(&url).send_empty()).await;
-            if !matches!(pinned, Ok(Ok(_))) {
+        Some(hwnd) => {
+            if ureq::post(&format!("{link}/windows/{hwnd}/pin")).send_empty().is_err() {
                 tracing::warn!("cannot show the login window on every desktop");
             }
         }
-        Err(err) => tracing::warn!(%err, "the login window has no handle"),
+        None => tracing::warn!("the login window has no handle"),
     }
-    let _ = window.set_focus();
+    window.set_focus();
 }
 
-/// Open `shop`'s login window and wait until the user has signed in, then return the
-/// shop's cookies and close it. An error when the window is closed first.
-#[tauri::command]
-pub async fn shop_login(
-    app: AppHandle,
-    link: String,
-    shop: String,
-) -> Result<Vec<SessionCookie>, String> {
-    let fail = |err: tauri::Error| err.to_string();
-    let Some(shop) = self::shop(&shop) else {
-        return Err(format!("{shop} has no login window"));
-    };
-    if let Some(open) = app.get_webview_window(shop.label) {
-        open.destroy().map_err(fail)?;
-    }
-    let (done, signed) = mpsc::channel::<bool>();
-    let on_load = Mutex::new(Some(done.clone()));
-    let url = Url::parse(shop.start).map_err(|err| err.to_string())?;
-    let signed_in = shop.signed_in;
-    let window = WebviewWindowBuilder::new(&app, shop.label, WebviewUrl::External(url))
-        .title(shop.title)
-        .inner_size(1000.0, 820.0)
-        .center()
-        .incognito(true)
-        .on_page_load(move |_, payload| {
-            if payload.event() == PageLoadEvent::Finished && signed_in(payload.url()) {
-                let sender = on_load
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .take();
-                if let Some(sender) = sender {
-                    let _ = sender.send(true);
-                }
-            }
-        })
-        .build()
-        .map_err(fail)?;
-    window.on_window_event(move |event| {
-        if matches!(event, WindowEvent::Destroyed) {
-            let _ = done.send(false);
+fn answer(value: &Value) -> i32 {
+    let mut out = std::io::stdout().lock();
+    let written = writeln!(out, "{value}").and_then(|()| out.flush());
+    i32::from(written.is_err())
+}
+
+/// Signs in through the login window's process.
+pub struct LoginProcess;
+
+impl SignIn for LoginProcess {
+    fn sign_in(&self, shop: &str, base: &str) -> Result<Value, ErrorBody> {
+        let window = |message: String| ErrorBody { error: Some("window".into()), message: Some(message) };
+        let exe = std::env::current_exe().map_err(|err| window(err.to_string()))?;
+        let output = Command::new(exe)
+            .args([LOGIN, shop, LINK, base])
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .output()
+            .map_err(|err| window(err.to_string()))?;
+        let text = String::from_utf8_lossy(&output.stdout);
+        let answer: Value = text
+            .lines()
+            .rev()
+            .find_map(|line| serde_json::from_str(line).ok())
+            .ok_or_else(|| window(format!("the login window ended without an answer ({})", output.status)))?;
+        match answer.get("cookies") {
+            Some(cookies) => Ok(cookies.clone()),
+            None => Err(serde_json::from_value(answer).unwrap_or_else(|_| ErrorBody::named("window"))),
         }
-    });
-    pin(&window, &link).await;
-    let wait = tauri::async_runtime::spawn_blocking(move || signed.recv().unwrap_or(false));
-    if !wait.await.map_err(fail)? {
-        return Err("the login window was closed before signing in".into());
     }
-    // WebView2 deadlocks reading cookies on the thread that handles the window.
-    let reader = window.clone();
-    let cookies = tauri::async_runtime::spawn_blocking(move || reader.cookies())
-        .await
-        .map_err(fail)?
-        .map_err(fail)?;
-    let _ = window.destroy();
-    let cookies: Vec<SessionCookie> = cookies
-        .iter()
-        .filter_map(|cookie| session_cookie(cookie, shop.site))
-        .collect();
-    info!(
-        site = shop.site,
-        cookies = cookies.len(),
-        "signed in to a shop"
-    );
-    Ok(cookies)
 }
 
 #[cfg(test)]
 mod tests {
-    use tauri::webview::Cookie;
+    use wry::cookie::Cookie;
 
     use super::{SessionCookie, session_cookie, shop};
 
     #[test]
     fn fanzas_library_page_means_signed_in() {
         let fanza = shop("fanza").unwrap();
-        let yes = |url: &str| (fanza.signed_in)(&url.parse().unwrap());
+        let yes = |url: &str| (fanza.signed_in)(&url::Url::parse(url).unwrap());
         assert!(yes("https://dlsoft.dmm.co.jp/library/"));
         assert!(yes(
             "https://dlsoft.dmm.co.jp/library/detail/single/selen_0004/"
@@ -201,7 +266,7 @@ mod tests {
     #[test]
     fn dlsite_play_past_the_login_means_signed_in() {
         let dlsite = shop("dlsite").unwrap();
-        let yes = |url: &str| (dlsite.signed_in)(&url.parse().unwrap());
+        let yes = |url: &str| (dlsite.signed_in)(&url::Url::parse(url).unwrap());
         assert!(yes("https://play.dlsite.com/"));
         assert!(yes("https://play.dlsite.com/library"));
         // Its own way in, DLsite's login with its Cloudflare check, and the shop.

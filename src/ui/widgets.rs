@@ -1,0 +1,453 @@
+//! The parts every screen shares: toasts, long-press menus, the long press itself, dialogs'
+//! frames and buttons.
+
+use std::{cell::Cell, rc::Rc, time::Duration};
+
+use gpui::{
+    AnyElement, App, Bounds, Context, DispatchPhase, Div, Element, ElementId, FontWeight,
+    GlobalElementId, Hitbox, HitboxBehavior, InspectorElementId, IntoElement, LayoutId,
+    LongPressEvent, MouseButton, ParentElement, Pixels, Point, Role, SharedString, Stateful,
+    Styled, Task, TouchPhase, Window, anchored, deferred, div, point, prelude::*, px,
+};
+
+use super::{
+    icons::glyph,
+    theme::{
+        CONTROL_HEIGHT, FS_LABEL, FS_MD, FS_SM, RADIUS_LG, RADIUS_MD, ROW_HEIGHT, SP_2, SP_3, SP_4,
+        SP_5, Theme, backdrop, shadow,
+    },
+};
+use crate::model::display::Glyph;
+
+/// What a toast says, for a few seconds after each `show`.
+#[derive(Default)]
+pub struct Notice {
+    pub text: Option<SharedString>,
+    timer: Option<Task<()>>,
+}
+
+const TOAST_FOR: Duration = Duration::from_secs(3);
+
+impl Notice {
+    pub fn show<V: 'static>(
+        &mut self,
+        text: impl Into<SharedString>,
+        cx: &mut Context<V>,
+        notice: fn(&mut V) -> &mut Notice,
+    ) {
+        self.text = Some(text.into());
+        self.timer = Some(cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(TOAST_FOR).await;
+            let _ = this.update(cx, |view, cx| {
+                notice(view).text = None;
+                cx.notify();
+            });
+        }));
+        cx.notify();
+    }
+
+    /// The toast at the bottom centre of its container. It cannot be pressed and does not
+    /// get in the way of what is under it.
+    pub fn render(&self, theme: &Theme) -> impl IntoElement + use<> {
+        div()
+            .absolute()
+            .bottom(SP_5)
+            .left_0()
+            .right_0()
+            .flex()
+            .justify_center()
+            .children(self.text.clone().map(|text| {
+                div()
+                    .id("toast")
+                    .role(Role::Status)
+                    .aria_label(text.clone())
+                    .max_w(px(960.))
+                    .px(SP_4)
+                    .py(SP_3)
+                    .border_1()
+                    .border_color(theme.border)
+                    .rounded(RADIUS_MD)
+                    .bg(theme.surface_raised)
+                    .shadow(shadow())
+                    .text_size(FS_MD)
+                    .child(text)
+            }))
+    }
+}
+
+/// A choice in a long-press menu.
+pub struct MenuItem {
+    pub label: SharedString,
+    pub disabled: bool,
+    /// For a choice of one: whether it is the chosen one.
+    pub checked: Option<bool>,
+    pub action: Rc<dyn Fn(&mut Window, &mut App)>,
+}
+
+impl MenuItem {
+    pub fn new(label: impl Into<SharedString>, action: impl Fn(&mut Window, &mut App) + 'static) -> Self {
+        Self {
+            label: label.into(),
+            disabled: false,
+            checked: None,
+            action: Rc::new(action),
+        }
+    }
+
+    pub fn disabled(mut self, disabled: bool) -> Self {
+        self.disabled = disabled;
+        self
+    }
+
+    pub fn checked(mut self, checked: bool) -> Self {
+        self.checked = Some(checked);
+        self
+    }
+}
+
+/// A menu that opens where the finger was, kept inside the window.
+pub struct Menu {
+    pub at: Point<Pixels>,
+    pub title: SharedString,
+    pub items: Vec<MenuItem>,
+}
+
+impl Menu {
+    pub fn new(at: Point<Pixels>, title: impl Into<SharedString>, items: Vec<MenuItem>) -> Self {
+        Self {
+            at,
+            title: title.into(),
+            items,
+        }
+    }
+
+    /// The menu over everything, closing (through `close`) on a choice, outside or Esc. The
+    /// choice runs after the menu closed, so that it can open what comes next.
+    pub fn render(&self, theme: &Theme, close: Rc<dyn Fn(&mut Window, &mut App)>) -> impl IntoElement + use<> {
+        let items = self.items.iter().enumerate().map(|(index, item)| {
+            let action = item.action.clone();
+            let close = close.clone();
+            let row = div()
+                .id(("menu-item", index))
+                .role(if item.checked.is_some() { Role::RadioButton } else { Role::MenuItem })
+                .aria_label(item.label.clone())
+                .flex()
+                .items_center()
+                .gap(SP_2)
+                .min_h(ROW_HEIGHT)
+                .px(SP_4)
+                .text_size(FS_LABEL)
+                .when_some(item.checked, |row, checked| {
+                    row.aria_toggled(checked.into())
+                        .when(checked, |row| row.font_weight(FontWeight::SEMIBOLD))
+                        .child(div().w(px(24.)).flex_none().when(checked, |mark| {
+                            mark.child(glyph(Glyph::Check, px(24.), theme.accent))
+                        }))
+                })
+                .child(item.label.clone());
+            if item.disabled {
+                row.opacity(0.5).into_any_element()
+            } else {
+                row.focusable()
+                    .tab_stop(true)
+                    .cursor_pointer()
+                    .hover({ let c = theme.hover_1; move |s| s.bg(c) })
+                    .on_click(move |_, window, cx| {
+                        close(window, cx);
+                        action(window, cx);
+                    })
+                    .into_any_element()
+            }
+        });
+        let outside = close.clone();
+        deferred(
+            div()
+                .id("menu-layer")
+                .absolute()
+                .inset_0()
+                .occlude()
+                .on_mouse_down(MouseButton::Left, move |_, window, cx| outside(window, cx))
+                .on_key_down({
+                    let close = close.clone();
+                    move |event, window, cx| {
+                        if event.keystroke.key == "escape" {
+                            close(window, cx);
+                            cx.stop_propagation();
+                        }
+                    }
+                })
+                .child(
+                    anchored()
+                        .position(self.at)
+                        .snap_to_window_with_margin(px(8.))
+                        .child(
+                            div()
+                                .id("menu")
+                                .role(Role::Menu)
+                                .aria_label(self.title.clone())
+                                .occlude()
+                                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                                .w(px(320.))
+                                .py(SP_2)
+                                .flex()
+                                .flex_col()
+                                .border_1()
+                                .border_color(theme.border)
+                                .rounded(RADIUS_LG)
+                                .bg(theme.surface_raised)
+                                .text_color(theme.on_surface)
+                                .shadow(shadow())
+                                .child(
+                                    div()
+                                        .px(SP_4)
+                                        .py(SP_2)
+                                        .text_size(FS_SM)
+                                        .text_color(theme.muted)
+                                        .truncate()
+                                        .child(self.title.clone()),
+                                )
+                                .children(items),
+                        ),
+                ),
+        )
+        .with_priority(2)
+    }
+}
+
+/// A dialog in the middle of the window over a black 50% cover; a tap on the cover or Esc
+/// asks `close`.
+pub fn modal<I: Into<ElementId>, L: Into<SharedString>>(
+    id: I,
+    label: L,
+    theme: &Theme,
+    close: Rc<dyn Fn(&mut Window, &mut App)>,
+    panel: Stateful<Div>,
+) -> impl IntoElement + use<I, L> {
+    let outside = close.clone();
+    deferred(
+        div()
+            .id(id)
+            .absolute()
+            .inset_0()
+            .occlude()
+            .flex()
+            .items_center()
+            .justify_center()
+            .bg(backdrop())
+            .on_mouse_down(MouseButton::Left, move |_, window, cx| outside(window, cx))
+            .on_key_down(move |event, window, cx| {
+                if event.keystroke.key == "escape" {
+                    close(window, cx);
+                    cx.stop_propagation();
+                }
+            })
+            .child(
+                panel
+                    .role(Role::Dialog)
+                    .aria_label(label.into())
+                    .occlude()
+                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                    .border_1()
+                    .border_color(theme.border)
+                    .rounded(RADIUS_LG)
+                    .text_color(theme.on_surface)
+                    .shadow(shadow()),
+            ),
+    )
+    .with_priority(1)
+}
+
+/// The 56px × button that closes a dialog.
+pub fn close_button(theme: &Theme, close: Rc<dyn Fn(&mut Window, &mut App)>) -> Stateful<Div> {
+    div()
+        .id("close")
+        .role(Role::Button)
+        .aria_label("閉じる")
+        .focusable()
+        .tab_stop(true)
+        .flex()
+        .flex_none()
+        .items_center()
+        .justify_center()
+        .size(CONTROL_HEIGHT)
+        .rounded(RADIUS_MD)
+        .cursor_pointer()
+        .hover({ let c = theme.hover_1; move |s| s.bg(c) })
+        .child(glyph(Glyph::Close, px(28.), theme.on_surface))
+        .on_click(move |_, window, cx| close(window, cx))
+}
+
+/// A dialog's heading with its close button.
+pub fn dialog_head<T: Into<SharedString>>(
+    title: T,
+    theme: &Theme,
+    close: Rc<dyn Fn(&mut Window, &mut App)>,
+) -> impl IntoElement + use<T> {
+    div()
+        .flex()
+        .items_center()
+        .gap(SP_3)
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .text_size(FS_LABEL)
+                .font_weight(FontWeight::SEMIBOLD)
+                .truncate()
+                .child(title.into()),
+        )
+        .child(close_button(theme, close))
+}
+
+/// A 56px-high button with an outline (the accent, or the danger colour).
+pub fn outlined_button(
+    id: impl Into<ElementId>,
+    label: impl Into<SharedString>,
+    color: gpui::Hsla,
+    theme: &Theme,
+) -> Stateful<Div> {
+    let label = label.into();
+    div()
+        .id(id)
+        .role(Role::Button)
+        .aria_label(label.clone())
+        .focusable()
+        .tab_stop(true)
+        .flex()
+        .flex_none()
+        .items_center()
+        .justify_center()
+        .gap(SP_2)
+        .h(CONTROL_HEIGHT)
+        .px(SP_5)
+        .border_1()
+        .border_color(color)
+        .rounded(RADIUS_MD)
+        .text_color(color)
+        .text_size(FS_LABEL)
+        .cursor_pointer()
+        .hover({ let c = theme.hover_1; move |s| s.bg(c) })
+        .child(label)
+}
+
+/// What a long press opens, at the given point.
+pub type OnLong = Rc<dyn Fn(Point<Pixels>, &mut Window, &mut App)>;
+
+/// Wrap `child` so that a long press of a finger (or the right button) calls `on_long` with
+/// where it was; the press that opens the menu does not also tap. `centre` receives the
+/// middle of the child, for the menu key.
+pub fn long_press(
+    id: impl Into<ElementId>,
+    child: impl IntoElement,
+    on_long: Option<OnLong>,
+    centre: Rc<Cell<Point<Pixels>>>,
+) -> LongPress {
+    LongPress {
+        id: id.into(),
+        child: child.into_any_element(),
+        on_long,
+        centre,
+    }
+}
+
+pub struct LongPress {
+    id: ElementId,
+    child: AnyElement,
+    on_long: Option<OnLong>,
+    centre: Rc<Cell<Point<Pixels>>>,
+}
+
+/// Whether a key opens the menu (the menu key or Shift+F10).
+pub fn is_menu_key(keystroke: &gpui::Keystroke) -> bool {
+    keystroke.key == "menu" || (keystroke.key == "f10" && keystroke.modifiers.shift)
+}
+
+impl IntoElement for LongPress {
+    type Element = Self;
+
+    fn into_element(self) -> Self::Element {
+        self
+    }
+}
+
+impl Element for LongPress {
+    type RequestLayoutState = ();
+    type PrepaintState = Option<Hitbox>;
+
+    fn id(&self) -> Option<ElementId> {
+        Some(self.id.clone())
+    }
+
+    fn source_location(&self) -> Option<&'static core::panic::Location<'static>> {
+        None
+    }
+
+    fn request_layout(
+        &mut self,
+        _id: Option<&GlobalElementId>,
+        _inspector_id: Option<&InspectorElementId>,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> (LayoutId, Self::RequestLayoutState) {
+        (self.child.request_layout(window, cx), ())
+    }
+
+    fn prepaint(
+        &mut self,
+        _id: Option<&GlobalElementId>,
+        _inspector_id: Option<&InspectorElementId>,
+        bounds: Bounds<Pixels>,
+        _request_layout: &mut Self::RequestLayoutState,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Self::PrepaintState {
+        self.child.prepaint(window, cx);
+        self.on_long
+            .is_some()
+            .then(|| window.insert_hitbox(bounds, HitboxBehavior::Normal))
+    }
+
+    fn paint(
+        &mut self,
+        _id: Option<&GlobalElementId>,
+        _inspector_id: Option<&InspectorElementId>,
+        bounds: Bounds<Pixels>,
+        _request_layout: &mut Self::RequestLayoutState,
+        hitbox: &mut Self::PrepaintState,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        self.child.paint(window, cx);
+        let (Some(hitbox), Some(on_long)) = (hitbox.take(), self.on_long.clone()) else {
+            return;
+        };
+        let touch = on_long.clone();
+        let touch_hitbox = hitbox.clone();
+        window.on_mouse_event(move |event: &LongPressEvent, phase, window, cx| {
+            if phase != DispatchPhase::Bubble
+                || event.phase != TouchPhase::Started
+                || window.default_prevented()
+                || !touch_hitbox.is_hovered(window)
+            {
+                return;
+            }
+            window.prevent_default();
+            cx.stop_propagation();
+            touch(event.start_position, window, cx);
+        });
+        let right = on_long.clone();
+        window.on_mouse_event(move |event: &gpui::MouseDownEvent, phase, window, cx| {
+            if phase == DispatchPhase::Bubble
+                && event.button == MouseButton::Right
+                && hitbox.is_hovered(window)
+            {
+                cx.stop_propagation();
+                right(event.position, window, cx);
+            }
+        });
+        self.centre.set(point(
+            bounds.origin.x + bounds.size.width / 2.,
+            bounds.origin.y + bounds.size.height / 2.,
+        ));
+    }
+}
