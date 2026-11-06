@@ -18,14 +18,15 @@ use crate::{
         Link,
         http::{Tungstenite, Ureq},
     },
-    login::LoginProcess,
     logging,
+    login::LoginProcess,
     model::placement::{Placement, placement},
     pictures::Pictures,
     platform,
+    ui::widgets::Act,
     ui::{
         self,
-        deck::{Deck, Setup},
+        deck::{Deck, Opened, Setup},
         icons::Assets,
         theme::Theme,
     },
@@ -61,7 +62,12 @@ pub fn run(version: &str) {
             ui::bind_keys(cx);
             let loaded = config::load(&config::default_path());
             let link = connect(&loaded.link, cx);
-            cx.set_global(Panel { link, window: None, updater, replacing: false });
+            cx.set_global(Panel {
+                link,
+                window: None,
+                updater,
+                replacing: false,
+            });
             cx.on_window_closed(|cx, _| {
                 if cx.windows().is_empty() && !cx.global::<Panel>().replacing {
                     cx.quit();
@@ -72,7 +78,7 @@ pub fn run(version: &str) {
             // A later start hands its arguments over and exits.
             cx.spawn(async move |cx: &mut AsyncApp| {
                 while let Some(args) = later.next().await {
-                    let _ = cx.update(|cx| started_again(&args, cx));
+                    let () = cx.update(|cx| started_again(&args, cx));
                 }
             })
             .detach();
@@ -81,7 +87,12 @@ pub fn run(version: &str) {
 
 fn connect(base: &str, cx: &mut App) -> Entity<Link> {
     cx.new(|cx| {
-        let mut link = Link::new(base, Arc::new(Ureq::default()), Arc::new(Tungstenite), Arc::new(LoginProcess));
+        let mut link = Link::new(
+            base,
+            Arc::new(Ureq::default()),
+            Arc::new(Tungstenite),
+            Arc::new(LoginProcess),
+        );
         link.start(cx);
         link
     })
@@ -121,7 +132,10 @@ fn place(loaded: config::Loaded, cx: &mut App) {
                     Some(monitor) => Place::Fill(display, DisplayId::new(monitor)),
                     None => Place::Wait(format!("{display} is not connected")),
                 },
-                Placement::Setup { candidates } => Place::Setup(Setup { path: loaded.path.clone(), candidates }),
+                Placement::Setup { candidates } => Place::Setup(Setup {
+                    path: loaded.path.clone(),
+                    candidates,
+                }),
                 Placement::Wait { reason } => Place::Wait(reason),
             };
             match place {
@@ -133,7 +147,7 @@ fn place(loaded: config::Loaded, cx: &mut App) {
                     cx.background_executor().timer(PLACE_RETRY).await;
                 }
                 place => {
-                    let _ = cx.update(|cx| open(place, &loaded, cx));
+                    let () = cx.update(|cx| open(place, &loaded, cx));
                     return;
                 }
             }
@@ -157,9 +171,10 @@ fn open(place: Place, loaded: &config::Loaded, cx: &mut App) {
     });
     let (options, setup) = match place {
         Place::Fill(name, id) => {
-            let bounds = cx
-                .find_display(id)
-                .map_or_else(|| Bounds::centered(None, size(px(1024.), px(640.)), cx), |d| d.bounds());
+            let bounds = cx.find_display(id).map_or_else(
+                || Bounds::centered(None, size(px(1024.), px(640.)), cx),
+                |d| d.bounds(),
+            );
             info!(monitor = %name, "filling the monitor");
             let options = WindowOptions {
                 window_bounds: Some(WindowBounds::Fullscreen(bounds)),
@@ -178,7 +193,11 @@ fn open(place: Place, loaded: &config::Loaded, cx: &mut App) {
         Place::Setup(setup) => {
             warn!("no monitor is configured; showing a window that asks for one");
             let options = WindowOptions {
-                window_bounds: Some(WindowBounds::Windowed(Bounds::centered(None, size(px(1024.), px(640.)), cx))),
+                window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
+                    None,
+                    size(px(1024.), px(640.)),
+                    cx,
+                ))),
                 titlebar,
                 is_resizable: false,
                 window_background: WindowBackgroundAppearance::Opaque,
@@ -191,14 +210,21 @@ fn open(place: Place, loaded: &config::Loaded, cx: &mut App) {
     };
     let link = cx.global::<Panel>().link.clone();
     let (monitor, error) = (loaded.monitor.clone(), loaded.error.clone());
-    let reload: Rc<dyn Fn(&mut Window, &mut App)> = Rc::new(|window, cx| reload(window, cx));
+    let reload: Act = Rc::new(reload);
     let opened = cx.open_window(options, move |window, cx| {
         let hwnd = hwnd_of(window);
         if let Some(hwnd) = hwnd {
             take_touches(hwnd, window, cx);
         }
         cx.set_global(Theme::for_appearance(window.appearance()));
-        cx.new(|cx| Deck::new(link, monitor, error, setup, hwnd, reload, window, cx))
+        let opened = Opened {
+            monitor,
+            config_error: error,
+            setup,
+            hwnd,
+            reload,
+        };
+        cx.new(|cx| Deck::new(link, opened, window, cx))
     });
     match opened {
         Ok(window) => {
@@ -221,7 +247,8 @@ fn take_touches(hwnd: isize, window: &mut Window, cx: &mut App) {
     window
         .spawn(cx, async move |cx| {
             while let Some(touch) = touches.next().await {
-                let _ = cx.update(|window, cx| window.dispatch_event(PlatformInput::Touch(touch), cx));
+                let _ =
+                    cx.update(|window, cx| window.dispatch_event(PlatformInput::Touch(touch), cx));
             }
         })
         .detach();

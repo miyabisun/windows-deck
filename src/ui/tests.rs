@@ -10,9 +10,8 @@ mod mixer;
 use std::{rc::Rc, sync::Arc, time::Duration};
 
 use gpui::{
-    AppContext as _, Bounds, Entity, Modifiers, MouseButton, MouseDownEvent, MouseUpEvent,
-    PlatformInput, Pixels, TestAppContext, TouchEvent, TouchId, TouchPhase, VisualTestContext, px,
-    size,
+    AppContext as _, Bounds, Entity, Modifiers, MouseButton, MouseDownEvent, MouseUpEvent, Pixels,
+    PlatformInput, TestAppContext, TouchEvent, TouchId, TouchPhase, VisualTestContext, px, size,
 };
 
 use super::{deck::Deck, theme::Theme};
@@ -22,7 +21,10 @@ use crate::link::{
 };
 
 /// The panel in a 1920×1280 window, connected to `mock`, its monitor configured.
-pub fn open<'a>(cx: &'a mut TestAppContext, mock: &MockLink) -> (Entity<Deck>, &'a mut VisualTestContext) {
+pub fn open<'a>(
+    cx: &'a mut TestAppContext,
+    mock: &MockLink,
+) -> (Entity<Deck>, &'a mut VisualTestContext) {
     open_with(cx, mock, Some("T10FA"))
 }
 
@@ -38,11 +40,27 @@ pub fn open_with<'a>(
     let (mock, monitor) = (mock.clone(), monitor.map(str::to_owned));
     let (deck, vcx) = cx.add_window_view(move |window, cx| {
         let link = cx.new(|cx| {
-            let mut link = Link::new(BASE, Arc::new(mock.clone()), Arc::new(mock.clone()), Arc::new(mock.clone()));
+            let mut link = Link::new(
+                BASE,
+                Arc::new(mock.clone()),
+                Arc::new(mock.clone()),
+                Arc::new(mock.clone()),
+            );
             link.start(cx);
             link
         });
-        Deck::new(link, monitor, None, None, Some(4_723_016), Rc::new(|_, _| {}), window, cx)
+        Deck::new(
+            link,
+            super::deck::Opened {
+                monitor,
+                config_error: None,
+                setup: None,
+                hwnd: Some(4_723_016),
+                reload: Rc::new(|_, _| {}),
+            },
+            window,
+            cx,
+        )
     });
     vcx.simulate_resize(size(px(1920.), px(1280.)));
     vcx.run_until_parked();
@@ -69,7 +87,9 @@ pub fn shows(vcx: &mut VisualTestContext, text: &str) -> bool {
 }
 
 fn centre(vcx: &mut VisualTestContext, selector: &str) -> gpui::Point<Pixels> {
-    bounds(vcx, selector).unwrap_or_else(|| panic!("{selector} is not on the screen")).center()
+    bounds(vcx, selector)
+        .unwrap_or_else(|| panic!("{selector} is not on the screen"))
+        .center()
 }
 
 pub fn click(vcx: &mut VisualTestContext, selector: &str) {
@@ -80,15 +100,32 @@ pub fn click(vcx: &mut VisualTestContext, selector: &str) {
 
 pub fn right_click(vcx: &mut VisualTestContext, selector: &str) {
     let position = centre(vcx, selector);
-    vcx.simulate_event(MouseDownEvent { button: MouseButton::Right, position, modifiers: Modifiers::none(), click_count: 1, first_mouse: false });
-    vcx.simulate_event(MouseUpEvent { button: MouseButton::Right, position, modifiers: Modifiers::none(), click_count: 1 });
+    vcx.simulate_event(MouseDownEvent {
+        button: MouseButton::Right,
+        position,
+        modifiers: Modifiers::none(),
+        click_count: 1,
+        first_mouse: false,
+    });
+    vcx.simulate_event(MouseUpEvent {
+        button: MouseButton::Right,
+        position,
+        modifiers: Modifiers::none(),
+        click_count: 1,
+    });
     vcx.run_until_parked();
 }
 
 fn touch(vcx: &mut VisualTestContext, phase: TouchPhase, position: gpui::Point<Pixels>) {
     vcx.update(|window, cx| {
         window.dispatch_event(
-            PlatformInput::Touch(TouchEvent { id: TouchId(1), phase, position, predicted_position: None, force: None }),
+            PlatformInput::Touch(TouchEvent {
+                id: TouchId(1),
+                phase,
+                position,
+                predicted_position: None,
+                force: None,
+            }),
             cx,
         );
     });
@@ -116,6 +153,11 @@ pub fn long_press(vcx: &mut VisualTestContext, selector: &str) {
 /// lifts (so there is no fling to run on).
 pub fn slide(vcx: &mut VisualTestContext, selector: &str, dx: f32, dy: f32) {
     let start = centre(vcx, selector);
+    slide_from(vcx, start, dx, dy);
+}
+
+/// A finger sliding from `start` by `dx`, `dy`, resting before it lifts.
+pub fn slide_from(vcx: &mut VisualTestContext, start: gpui::Point<Pixels>, dx: f32, dy: f32) {
     touch(vcx, TouchPhase::Started, start);
     for step in 1..=10 {
         #[allow(clippy::cast_precision_loss)]

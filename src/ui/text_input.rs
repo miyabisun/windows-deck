@@ -10,8 +10,8 @@ use gpui::{
     App, Bounds, ClipboardItem, Context, CursorStyle, ElementId, ElementInputHandler, Entity,
     EntityInputHandler, EventEmitter, FocusHandle, Focusable, GlobalElementId, KeyBinding,
     LayoutId, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, PaintQuad, Pixels, Point,
-    ShapedLine, SharedString, Style, TextRun, UTF16Selection, UnderlineStyle, Window, actions,
-    div, fill, point, prelude::*, px, relative, size,
+    ShapedLine, SharedString, Style, TextRun, UTF16Selection, UnderlineStyle, Window, actions, div,
+    fill, point, prelude::*, px, relative, size,
 };
 use unicode_segmentation::UnicodeSegmentation as _;
 
@@ -54,7 +54,7 @@ impl TextInput {
         if self.selected_range.is_empty() {
             self.move_to(self.previous_boundary(self.cursor_offset()), window, cx);
         } else {
-            self.move_to(self.selected_range.start, window, cx)
+            self.move_to(self.selected_range.start, window, cx);
         }
     }
 
@@ -62,7 +62,7 @@ impl TextInput {
         if self.selected_range.is_empty() {
             self.move_to(self.next_boundary(self.selected_range.end), window, cx);
         } else {
-            self.move_to(self.selected_range.end, window, cx)
+            self.move_to(self.selected_range.end, window, cx);
         }
     }
 
@@ -76,7 +76,7 @@ impl TextInput {
 
     fn select_all(&mut self, _: &SelectAll, window: &mut Window, cx: &mut Context<Self>) {
         self.move_to(0, window, cx);
-        self.select_to(self.content.len(), window, cx)
+        self.select_to(self.content.len(), window, cx);
     }
 
     fn home(&mut self, _: &Home, window: &mut Window, cx: &mut Context<Self>) {
@@ -94,9 +94,9 @@ impl TextInput {
                 window.play_system_bell();
                 return;
             }
-            self.select_to(prev, window, cx)
+            self.select_to(prev, window, cx);
         }
-        self.replace_text_in_range(None, "", window, cx)
+        self.replace_text_in_range(None, "", window, cx);
     }
 
     fn delete(&mut self, _: &Delete, window: &mut Window, cx: &mut Context<Self>) {
@@ -106,9 +106,9 @@ impl TextInput {
                 window.play_system_bell();
                 return;
             }
-            self.select_to(next, window, cx)
+            self.select_to(next, window, cx);
         }
-        self.replace_text_in_range(None, "", window, cx)
+        self.replace_text_in_range(None, "", window, cx);
     }
 
     fn on_mouse_down(
@@ -123,7 +123,7 @@ impl TextInput {
         if event.modifiers.shift {
             self.select_to(self.index_for_mouse_position(event.position), window, cx);
         } else {
-            self.move_to(self.index_for_mouse_position(event.position), window, cx)
+            self.move_to(self.index_for_mouse_position(event.position), window, cx);
         }
     }
 
@@ -142,6 +142,7 @@ impl TextInput {
         }
     }
 
+    #[allow(clippy::unused_self)] // GPUI's handler, as its example has it.
     fn show_character_palette(
         &mut self,
         _: &ShowCharacterPalette,
@@ -153,7 +154,7 @@ impl TextInput {
 
     fn paste(&mut self, _: &Paste, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) {
-            self.replace_text_in_range(None, &text.replace("\n", " "), window, cx);
+            self.replace_text_in_range(None, &text.replace('\n', " "), window, cx);
         }
     }
 
@@ -169,7 +170,7 @@ impl TextInput {
             cx.write_to_clipboard(ClipboardItem::new_string(
                 self.content[self.selected_range.clone()].to_string(),
             ));
-            self.replace_text_in_range(None, "", window, cx)
+            self.replace_text_in_range(None, "", window, cx);
         }
     }
 
@@ -177,7 +178,7 @@ impl TextInput {
         self.selected_range = offset..offset;
         self.selection_reversed = false;
         window.notify_text_selection_changed(&self.focus_handle);
-        cx.notify()
+        cx.notify();
     }
 
     fn cursor_offset(&self) -> usize {
@@ -208,16 +209,16 @@ impl TextInput {
 
     fn select_to(&mut self, offset: usize, window: &Window, cx: &mut Context<Self>) {
         if self.selection_reversed {
-            self.selected_range.start = offset
+            self.selected_range.start = offset;
         } else {
-            self.selected_range.end = offset
-        };
+            self.selected_range.end = offset;
+        }
         if self.selected_range.end < self.selected_range.start {
             self.selection_reversed = !self.selection_reversed;
             self.selected_range = self.selected_range.end..self.selected_range.start;
         }
         window.notify_text_selection_changed(&self.focus_handle);
-        cx.notify()
+        cx.notify();
     }
 
     fn offset_from_utf16(&self, offset: usize) -> usize {
@@ -271,18 +272,6 @@ impl TextInput {
             .grapheme_indices(true)
             .find_map(|(idx, _)| (idx > offset).then_some(idx))
             .unwrap_or(self.content.len())
-    }
-
-    fn reset(&mut self, window: &Window, cx: &mut Context<Self>) {
-        self.content = "".into();
-        self.selected_range = 0..0;
-        self.selection_reversed = false;
-        self.marked_range = None;
-        self.last_layout = None;
-        self.last_bounds = None;
-        self.is_selecting = false;
-        window.notify_text_input_changed(&self.focus_handle);
-        cx.notify();
     }
 }
 
@@ -388,21 +377,22 @@ impl EntityInputHandler for TextInput {
         self.content =
             (self.content[0..range.start].to_owned() + new_text + &self.content[range.end..])
                 .into();
-        if !new_text.is_empty() {
-            self.marked_range = Some(range.start..range.start + new_text.len());
-        } else {
+        if new_text.is_empty() {
             self.marked_range = None;
+        } else {
+            self.marked_range = Some(range.start..range.start + new_text.len());
         }
         let insertion_start_utf16 = self.offset_to_utf16(range.start);
         let inserted_length_utf16 = new_text.encode_utf16().count();
-        self.selected_range = new_selected_range_utf16
-            .map(|selected| {
+        self.selected_range = new_selected_range_utf16.map_or_else(
+            || range.start + new_text.len()..range.start + new_text.len(),
+            |selected| {
                 self.range_from_utf16(
                     &(insertion_start_utf16 + selected.start.min(inserted_length_utf16)
                         ..insertion_start_utf16 + selected.end.min(inserted_length_utf16)),
                 )
-            })
-            .unwrap_or_else(|| range.start + new_text.len()..range.start + new_text.len());
+            },
+        );
         self.selection_reversed = false;
 
         window.notify_text_input_changed(&self.focus_handle);
@@ -622,18 +612,19 @@ impl Element for TextElement {
             cx,
         );
         if let Some(selection) = prepaint.selection.take() {
-            window.paint_quad(selection)
+            window.paint_quad(selection);
         }
-        let line = prepaint.line.take().unwrap();
-        line.paint(
+        let Some(line) = prepaint.line.take() else {
+            return;
+        };
+        let _ = line.paint(
             bounds.origin,
             window.line_height(),
             gpui::TextAlign::Left,
             None,
             window,
             cx,
-        )
-        .unwrap();
+        );
 
         if focus_handle.is_focused(window)
             && let Some(cursor) = prepaint.cursor.take()
@@ -733,4 +724,3 @@ impl Focusable for TextInput {
         self.focus_handle.clone()
     }
 }
-

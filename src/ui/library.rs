@@ -14,9 +14,12 @@ use super::{
     dialogs::{AskDialog, Host, MenuGame, ProgramChooser, game_menu, open},
     icons::{glyph, spinner},
     text_input::{Changed, TextInput},
-    theme::{CONTROL_HEIGHT, FS_LABEL, FS_SM, RADIUS_MD, RADIUS_SM, SP_2, SP_3, SP_4, SP_5, TILE_WIDTH, Theme},
+    theme::{
+        CONTROL_HEIGHT, FS_LABEL, FS_SM, RADIUS_MD, RADIUS_SM, SP_2, SP_3, SP_4, SP_5, TILE_WIDTH,
+        Theme,
+    },
     tile::{DraggedGame, Face, Tile, columns},
-    widgets::{Menu, MenuItem, Notice, close_button, long_press, modal},
+    widgets::{Act, Menu, MenuItem, Notice, OnStarted, close_button, long_press, modal},
 };
 use crate::{
     link::{Link, Started, item_key},
@@ -55,7 +58,7 @@ pub struct LibraryModal {
     focus: FocusHandle,
     _search: Subscription,
     _link: Subscription,
-    _load: Option<Task<()>>,
+    loading: Option<Task<()>>,
 }
 
 impl EventEmitter<DismissEvent> for LibraryModal {}
@@ -67,7 +70,14 @@ impl Focusable for LibraryModal {
 }
 
 impl Host for LibraryModal {
-    fn open_dialog(&mut self, view: AnyView, focus: FocusHandle, subscription: Subscription, _window: &mut Window, cx: &mut Context<Self>) {
+    fn open_dialog(
+        &mut self,
+        view: AnyView,
+        focus: FocusHandle,
+        subscription: Subscription,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.menu = None;
         self.dialog = Some((view, focus, subscription));
         cx.notify();
@@ -80,7 +90,8 @@ impl Host for LibraryModal {
     }
 
     fn tell(&mut self, text: String, cx: &mut Context<Self>) {
-        self.notice.show(text, cx, |this: &mut Self| &mut this.notice);
+        self.notice
+            .show(text, cx, |this: &mut Self| &mut this.notice);
     }
 
     fn changed(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
@@ -89,7 +100,13 @@ impl Host for LibraryModal {
 }
 
 impl LibraryModal {
-    pub fn new(link: Entity<Link>, button: String, label: String, window: &mut Window, cx: &mut Context<Self>) -> Self {
+    pub fn new(
+        link: Entity<Link>,
+        button: String,
+        label: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let search = cx.new(|cx| TextInput::new("名前で探す", "", cx));
         let search_changed = cx.subscribe_in(&search, window, |this, _, _: &Changed, _, cx| {
             this.list.reset(0);
@@ -115,7 +132,7 @@ impl LibraryModal {
             focus: cx.focus_handle(),
             _search: search_changed,
             _link: observed,
-            _load: None,
+            loading: None,
         };
         modal.load(cx);
         modal
@@ -127,13 +144,15 @@ impl LibraryModal {
 
     fn load(&mut self, cx: &mut Context<Self>) {
         let read = self.link.update(cx, |l, cx| l.library(&self.button, cx));
-        self._load = Some(cx.spawn(async move |this, cx| {
+        self.loading = Some(cx.spawn(async move |this, cx| {
             let read = read.await;
             let _ = this.update(cx, |this, cx| {
                 match read {
                     Ok(library) => {
                         // Forget selected labels that no longer exist.
-                        this.active.retain(|id| id == UNLABELED || library.labels.iter().any(|l| &l.id == id));
+                        this.active.retain(|id| {
+                            id == UNLABELED || library.labels.iter().any(|l| &l.id == id)
+                        });
                         this.library = Some(library);
                         this.failure = None;
                     }
@@ -148,41 +167,73 @@ impl LibraryModal {
     }
 
     fn state(&self, cx: &App) -> Option<crate::model::protocol::LibraryState> {
-        self.link.read(cx).buttons.iter().find(|b| b.id == self.button).and_then(|b| match &b.state {
-            State::Library(library) => Some(library.clone()),
-            _ => None,
-        })
+        self.link
+            .read(cx)
+            .buttons
+            .iter()
+            .find(|b| b.id == self.button)
+            .and_then(|b| match &b.state {
+                State::Library(library) => Some(library.clone()),
+                _ => None,
+            })
     }
 
     fn order(&self, cx: &App) -> Order {
-        let chosen = cx.try_global::<Orders>().and_then(|o| o.0.get(&self.button).copied()).unwrap_or(Order::Recent);
-        let offered = self.library.as_ref().map(|l| orders_of(&l.items)).unwrap_or_default();
+        let chosen = cx
+            .try_global::<Orders>()
+            .and_then(|o| o.0.get(&self.button).copied())
+            .unwrap_or(Order::Recent);
+        let offered = self
+            .library
+            .as_ref()
+            .map(|l| orders_of(&l.items))
+            .unwrap_or_default();
         // An order whose dates are gone (the purchases cannot be read) falls back.
-        if offered.contains(&chosen) { chosen } else { Order::Recent }
+        if offered.contains(&chosen) {
+            chosen
+        } else {
+            Order::Recent
+        }
     }
 
     fn shown(&self, cx: &App) -> Vec<Item> {
-        let Some(library) = &self.library else { return Vec::new() };
+        let Some(library) = &self.library else {
+            return Vec::new();
+        };
         let query = self.search.read(cx).text().to_owned();
         let sorted = sort_items(&library.items, self.order(cx));
-        visible_items(sorted, Filter { query: &query, active: &self.active, hide: &library.hide })
-            .into_iter()
-            .cloned()
-            .collect()
+        visible_items(
+            sorted,
+            Filter {
+                query: &query,
+                active: &self.active,
+                hide: &library.hide,
+            },
+        )
+        .into_iter()
+        .cloned()
+        .collect()
     }
 
     fn locked(&self) -> Option<String> {
-        labels_locked_reason(self.library.as_ref().and_then(|l| l.labels_locked.as_deref()))
+        labels_locked_reason(
+            self.library
+                .as_ref()
+                .and_then(|l| l.labels_locked.as_deref()),
+        )
     }
 
     fn tell_text(&mut self, text: String, cx: &mut Context<Self>) {
-        self.notice.show(text, cx, |this: &mut Self| &mut this.notice);
+        self.notice
+            .show(text, cx, |this: &mut Self| &mut this.notice);
     }
 
     /// Start a game; the list stays open where it was, to pick the next one or its label.
     fn start(&mut self, item: &Item, window: &mut Window, cx: &mut Context<Self>) {
         let (id, name) = (item.id.clone(), item.name.clone());
-        let started = self.link.update(cx, |l, cx| l.start_item(&self.button, &id, cx));
+        let started = self
+            .link
+            .update(cx, |l, cx| l.start_item(&self.button, &id, cx));
         cx.spawn_in(window, async move |this, cx| {
             let result = started.await;
             let _ = this.update_in(cx, |this, window, cx| match result {
@@ -194,10 +245,18 @@ impl LibraryModal {
         .detach();
     }
 
-    fn choose_program(&mut self, id: String, name: String, window: &mut Window, cx: &mut Context<Self>) {
+    fn choose_program(
+        &mut self,
+        id: String,
+        name: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let this = cx.entity().downgrade();
-        let started: Rc<dyn Fn(String, &mut App)> = Rc::new(move |name, cx| {
-            let _ = this.update(cx, |this, cx| this.tell_text(format!("「{name}」を起動しました"), cx));
+        let started: OnStarted = Rc::new(move |name, cx| {
+            let _ = this.update(cx, |this, cx| {
+                this.tell_text(format!("「{name}」を起動しました"), cx);
+            });
         });
         let (link, button) = (self.link.clone(), self.button.clone());
         let chooser = cx.new(|cx| ProgramChooser::new(link, button, id, name, Some(started), cx));
@@ -205,7 +264,9 @@ impl LibraryModal {
     }
 
     fn sign_in(&mut self, cx: &mut Context<Self>) {
-        let Some(shop) = self.library.as_ref().and_then(|l| l.sign_in.clone()) else { return };
+        let Some(shop) = self.library.as_ref().and_then(|l| l.sign_in.clone()) else {
+            return;
+        };
         self.signing_in = true;
         cx.notify();
         let done = self.link.update(cx, |l, cx| l.sign_in(&shop, cx));
@@ -224,7 +285,7 @@ impl LibraryModal {
     }
 
     /// Run a label change, then show its failure or read the library again.
-    fn change_labels(&mut self, change: Task<Option<String>>, cx: &mut Context<Self>) {
+    fn change_labels(change: Task<Option<String>>, cx: &mut Context<Self>) {
         cx.spawn(async move |this, cx| {
             let failed = change.await;
             let _ = this.update(cx, |this, cx| {
@@ -238,20 +299,31 @@ impl LibraryModal {
     }
 
     fn drop_game(&mut self, game: &DraggedGame, label: &Label, cx: &mut Context<Self>) {
-        let Some(item) = self.library.as_ref().and_then(|l| l.items.iter().find(|i| i.id == game.id)).cloned() else {
+        let Some(item) = self
+            .library
+            .as_ref()
+            .and_then(|l| l.items.iter().find(|i| i.id == game.id))
+            .cloned()
+        else {
             return;
         };
         if item.labels.contains(&label.id) {
-            self.tell_text(format!("「{}」にはもう「{}」が付いています", item.name, label.name), cx);
+            self.tell_text(
+                format!("「{}」にはもう「{}」が付いています", item.name, label.name),
+                cx,
+            );
             return;
         }
-        let put = self.link.update(cx, |l, cx| l.set_label(&self.button, &label.id, &item.id, true, cx));
+        let put = self.link.update(cx, |l, cx| {
+            l.set_label(&self.button, &label.id, &item.id, true, cx)
+        });
         let (name, label_name) = (item.name.clone(), label.name.clone());
         cx.spawn(async move |this, cx| {
             let failed = put.await;
-            let _ = this.update(cx, |this, cx| match failed {
-                Some(failed) => this.tell_text(failed, cx),
-                None => {
+            let _ = this.update(cx, |this, cx| {
+                if let Some(failed) = failed {
+                    this.tell_text(failed, cx);
+                } else {
                     this.tell_text(format!("「{name}」に「{label_name}」を付けました"), cx);
                     this.load(cx);
                 }
@@ -267,13 +339,23 @@ impl LibraryModal {
     fn ask_create(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let this = cx.entity().downgrade();
         let ask = cx.new(|cx| {
-            AskDialog::new("新しいラベル", None, Some(""), "作る", false, move |name, _, cx| {
-                let _ = this.update(cx, |this, cx| {
-                    let made = this.link.update(cx, |l, cx| l.create_label(&this.button, &name, cx));
-                    let change = cx.background_spawn(async move { made.await.err() });
-                    this.change_labels(change, cx);
-                });
-            }, cx)
+            AskDialog::new(
+                "新しいラベル",
+                None,
+                Some(""),
+                "作る",
+                false,
+                move |name, _, cx| {
+                    let _ = this.update(cx, |this, cx| {
+                        let made = this
+                            .link
+                            .update(cx, |l, cx| l.create_label(&this.button, &name, cx));
+                        let change = cx.background_spawn(async move { made.await.err() });
+                        Self::change_labels(change, cx);
+                    });
+                },
+                cx,
+            )
         });
         self.ask(ask, window, cx);
     }
@@ -284,7 +366,13 @@ impl LibraryModal {
         cx.notify();
     }
 
-    fn label_menu(&mut self, label: Label, at: Point<Pixels>, window: &mut Window, cx: &mut Context<Self>) {
+    fn label_menu(
+        &mut self,
+        label: Label,
+        at: Point<Pixels>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let fixed = !label.editable || self.locked().is_some();
         let this = cx.entity().downgrade();
         let rename = {
@@ -295,12 +383,22 @@ impl LibraryModal {
                     let target = cx.entity().downgrade();
                     let id = label.id.clone();
                     let ask = cx.new(|cx| {
-                        AskDialog::new("ラベルの名前変更", None, Some(&label.name), "変更する", false, move |name, _, cx| {
-                            let _ = target.update(cx, |this, cx| {
-                                let change = this.link.update(cx, |l, cx| l.rename_label(&this.button, &id, &name, cx));
-                                this.change_labels(change, cx);
-                            });
-                        }, cx)
+                        AskDialog::new(
+                            "ラベルの名前変更",
+                            None,
+                            Some(&label.name),
+                            "変更する",
+                            false,
+                            move |name, _, cx| {
+                                let _ = target.update(cx, |this, cx| {
+                                    let change = this.link.update(cx, |l, cx| {
+                                        l.rename_label(&this.button, &id, &name, cx)
+                                    });
+                                    Self::change_labels(change, cx);
+                                });
+                            },
+                            cx,
+                        )
                     });
                     host.ask(ask, window, cx);
                 });
@@ -323,8 +421,10 @@ impl LibraryModal {
                             true,
                             move |_, _, cx| {
                                 let _ = target.update(cx, |this, cx| {
-                                    let change = this.link.update(cx, |l, cx| l.delete_label(&this.button, &id, cx));
-                                    this.change_labels(change, cx);
+                                    let change = this
+                                        .link
+                                        .update(cx, |l, cx| l.delete_label(&this.button, &id, cx));
+                                    Self::change_labels(change, cx);
                                 });
                             },
                             cx,
@@ -341,14 +441,20 @@ impl LibraryModal {
 
     fn order_menu(&mut self, at: Point<Pixels>, window: &mut Window, cx: &mut Context<Self>) {
         let current = self.order(cx);
-        let offered = self.library.as_ref().map(|l| orders_of(&l.items)).unwrap_or_default();
+        let offered = self
+            .library
+            .as_ref()
+            .map(|l| orders_of(&l.items))
+            .unwrap_or_default();
         let items = offered
             .into_iter()
             .map(|order| {
                 let this = cx.entity().downgrade();
                 MenuItem::new(order.label(), move |_, cx| {
                     let _ = this.update(cx, |this, cx| {
-                        cx.default_global::<Orders>().0.insert(this.button.clone(), order);
+                        cx.default_global::<Orders>()
+                            .0
+                            .insert(this.button.clone(), order);
                         this.list.reset(0);
                         this.laid_out = (Vec::new(), 0);
                         cx.notify();
@@ -361,7 +467,7 @@ impl LibraryModal {
         self.show_menu(menu, window, cx);
     }
 
-    fn note_of(&self, item: &Item, order: Order, pinned: &[String]) -> Option<String> {
+    fn note_of(item: &Item, order: Order, pinned: &[String]) -> Option<String> {
         let mut notes = Vec::new();
         // The date the list is in order of, first, so the order shows for itself.
         if let (Some(note), Some(date)) = (order.note(), order.date(item)) {
@@ -382,7 +488,7 @@ impl LibraryModal {
         (!notes.is_empty()).then(|| notes.join("・"))
     }
 
-    fn chip(&self, id: &str, name: SharedString, on: bool, theme: &Theme) -> gpui::Stateful<gpui::Div> {
+    fn chip(id: &str, name: SharedString, on: bool, theme: &Theme) -> gpui::Stateful<gpui::Div> {
         div()
             .id(SharedString::from(format!("chip-{id}")))
             .debug_selector(|| format!("chip-{name}"))
@@ -408,7 +514,9 @@ impl LibraryModal {
             })
             .when(!on, |chip| {
                 let hover = theme.hover_1;
-                chip.border_color(theme.border).bg(theme.surface_raised).hover(move |s| s.bg(hover))
+                chip.border_color(theme.border)
+                    .bg(theme.surface_raised)
+                    .hover(move |s| s.bg(hover))
             })
             .child(name)
     }
@@ -419,7 +527,7 @@ impl Render for LibraryModal {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = Theme::get(cx);
         let entity = cx.entity().downgrade();
-        let close: Rc<dyn Fn(&mut Window, &mut App)> = {
+        let close: Act = {
             let entity = entity.clone();
             Rc::new(move |_, cx| {
                 let _ = entity.update(cx, |_, cx| cx.emit(DismissEvent));
@@ -429,7 +537,11 @@ impl Render for LibraryModal {
         let link = self.link.read(cx);
         let disabled = !link.connected();
         let order = self.order(cx);
-        let offered = self.library.as_ref().map(|l| orders_of(&l.items)).unwrap_or_default();
+        let offered = self
+            .library
+            .as_ref()
+            .map(|l| orders_of(&l.items))
+            .unwrap_or_default();
         let shown = self.shown(cx);
         let pinned: Vec<String> = state.pins.iter().map(|p| p.id.clone()).collect();
         let whole = state.whole_pictures();
@@ -461,7 +573,12 @@ impl Render for LibraryModal {
         let pending = link.pending.clone();
         let failures = link.failures.clone();
         let games = Rc::new(shown);
-        let notes: Rc<Vec<Option<String>>> = Rc::new(games.iter().map(|i| self.note_of(i, order, &pinned)).collect());
+        let notes: Rc<Vec<Option<String>>> = Rc::new(
+            games
+                .iter()
+                .map(|i| Self::note_of(i, order, &pinned))
+                .collect(),
+        );
         let button = self.button.clone();
         let link_handle = self.link.clone();
         let pinned_ids = Rc::new(pinned.clone());
@@ -485,43 +602,67 @@ impl Render for LibraryModal {
                             })
                         };
                         let on_long = {
-                            let (entity, item, link, button, pinned) = (entity.clone(), item.clone(), link_handle.clone(), button.clone(), pinned_ids.clone());
-                            Rc::new(move |at: Point<Pixels>, window: &mut Window, cx: &mut App| {
-                                let game = MenuGame {
-                                    id: item.id.clone(),
-                                    name: item.name.clone(),
-                                    installed: item.installed,
-                                    choosable: item.choosable,
-                                    page: Some(item.page.is_some()),
-                                };
-                                let menu = game_menu(entity.clone(), &link, &button, game, pinned.contains(&item.id), at, cx);
-                                let _ = entity.update(cx, |this, cx| this.show_menu(menu, window, cx));
-                            }) as super::widgets::OnLong
+                            let (entity, item, link, button, pinned) = (
+                                entity.clone(),
+                                item.clone(),
+                                link_handle.clone(),
+                                button.clone(),
+                                pinned_ids.clone(),
+                            );
+                            Rc::new(
+                                move |at: Point<Pixels>, window: &mut Window, cx: &mut App| {
+                                    let game = MenuGame {
+                                        id: item.id.clone(),
+                                        name: item.name.clone(),
+                                        installed: item.installed,
+                                        choosable: item.choosable,
+                                        page: Some(item.page.is_some()),
+                                    };
+                                    let menu = game_menu(
+                                        entity.clone(),
+                                        &link,
+                                        &button,
+                                        game,
+                                        pinned.contains(&item.id),
+                                        at,
+                                        cx,
+                                    );
+                                    let _ = entity
+                                        .update(cx, |this, cx| this.show_menu(menu, window, cx));
+                                },
+                            ) as super::widgets::OnLong
                         };
-                        div()
-                            .w(width)
-                            .flex_none()
-                            .child(
-                                Tile {
-                                    key: format!("list-{key}").into(),
-                                    label: item.name.clone().into(),
-                                    face: Face::Game {
-                                        cover: Some(item.image.clone().unwrap_or_else(|| picture_url(&base, &button, &item.id)).into()),
-                                        whole,
-                                        note: notes[index].clone(),
-                                    },
-                                    pending: pending.contains(&key),
-                                    failure: failures.get(&key).cloned(),
-                                    disabled,
-                                    inert: false,
-                                    on_press,
-                                    on_long: Some(on_long),
-                                    drag: Some(DraggedGame { id: item.id.clone(), name: item.name.clone().into() }),
-                                    gray: false,
-                                    width,
-                                }
-                                .render(&theme),
-                            )
+                        div().w(width).flex_none().child(
+                            Tile {
+                                key: format!("list-{key}").into(),
+                                label: item.name.clone().into(),
+                                face: Face::Game {
+                                    cover: Some(
+                                        item.image
+                                            .clone()
+                                            .unwrap_or_else(|| {
+                                                picture_url(&base, &button, &item.id)
+                                            })
+                                            .into(),
+                                    ),
+                                    whole,
+                                    note: notes[index].clone(),
+                                },
+                                pending: pending.contains(&key),
+                                failure: failures.get(&key).cloned(),
+                                disabled,
+                                inert: false,
+                                on_press,
+                                on_long: Some(on_long),
+                                drag: Some(DraggedGame {
+                                    id: item.id.clone(),
+                                    name: item.name.clone().into(),
+                                }),
+                                gray: false,
+                                width,
+                            }
+                            .render(&theme),
+                        )
                     }))
                     .into_any_element()
             }
@@ -548,15 +689,18 @@ impl Render for LibraryModal {
                     .rounded(RADIUS_MD)
                     .bg(theme.surface_raised)
                     .text_size(FS_LABEL)
-                    .on_key_down(cx.listener(move |this, event: &gpui::KeyDownEvent, window, cx| {
-                        // Enter starts the first game found, so a keyboard needs no pointer.
-                        if event.keystroke.key == "enter" && !search.read(cx).is_composing() {
-                            if let Some(first) = first.clone() {
+                    .on_key_down(cx.listener(
+                        move |this, event: &gpui::KeyDownEvent, window, cx| {
+                            // Enter starts the first game found, so a keyboard needs no pointer.
+                            if event.keystroke.key == "enter"
+                                && !search.read(cx).is_composing()
+                                && let Some(first) = first.clone()
+                            {
                                 cx.stop_propagation();
                                 this.start(&first, window, cx);
                             }
-                        }
-                    }))
+                        },
+                    ))
                     .child(self.search.clone()),
             )
             .when(offered.len() > 1, |head| {
@@ -595,38 +739,58 @@ impl Render for LibraryModal {
 
         let chips = self.library.clone().map(|library| {
             let unlabeled = self.active.iter().any(|a| a == UNLABELED);
-            let mut chips: Vec<gpui::AnyElement> = vec![self
-                .chip(UNLABELED, "ラベル非登録".into(), unlabeled, &theme)
-                .on_click(cx.listener(|this, _, _, cx| {
-                    this.active = toggle_label(&this.active, UNLABELED);
-                    this.list.reset(0);
-                    this.laid_out = (Vec::new(), 0);
-                    cx.notify();
-                }))
-                .into_any_element()];
+            let mut chips: Vec<gpui::AnyElement> = vec![
+                Self::chip(UNLABELED, "ラベル非登録".into(), unlabeled, &theme)
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.active = toggle_label(&this.active, UNLABELED);
+                        this.list.reset(0);
+                        this.laid_out = (Vec::new(), 0);
+                        cx.notify();
+                    }))
+                    .into_any_element(),
+            ];
             for label in library.labels {
                 let on = self.active.contains(&label.id);
                 let toggled = label.id.clone();
-                let mut chip = self.chip(&label.id, label.name.clone().into(), on, &theme).on_click(cx.listener(move |this, _, _, cx| {
-                    this.active = toggle_label(&this.active, &toggled);
-                    this.list.reset(0);
-                    this.laid_out = (Vec::new(), 0);
-                    cx.notify();
-                }));
+                let mut chip = Self::chip(&label.id, label.name.clone().into(), on, &theme)
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.active = toggle_label(&this.active, &toggled);
+                        this.list.reset(0);
+                        this.laid_out = (Vec::new(), 0);
+                        cx.notify();
+                    }));
                 if locked.is_none() {
                     let (accent, hover_2, dropped) = (theme.accent, theme.hover_2, label.clone());
                     chip = chip
-                        .drag_over::<DraggedGame>(move |style, _, _, _| style.border_2().border_dashed().border_color(accent).bg(hover_2))
-                        .on_drop(cx.listener(move |this, game: &DraggedGame, _, cx| this.drop_game(game, &dropped, cx)));
+                        .drag_over::<DraggedGame>(move |style, _, _, _| {
+                            style
+                                .border_2()
+                                .border_dashed()
+                                .border_color(accent)
+                                .bg(hover_2)
+                        })
+                        .on_drop(cx.listener(move |this, game: &DraggedGame, _, cx| {
+                            this.drop_game(game, &dropped, cx);
+                        }));
                 }
                 let on_long = {
                     let (entity, label) = (entity.clone(), label.clone());
-                    Rc::new(move |at: Point<Pixels>, window: &mut Window, cx: &mut App| {
-                        let _ = entity.update(cx, |this, cx| this.label_menu(label.clone(), at, window, cx));
-                    }) as super::widgets::OnLong
+                    Rc::new(
+                        move |at: Point<Pixels>, window: &mut Window, cx: &mut App| {
+                            let _ = entity.update(cx, |this, cx| {
+                                this.label_menu(label.clone(), at, window, cx);
+                            });
+                        },
+                    ) as super::widgets::OnLong
                 };
                 chips.push(
-                    long_press(SharedString::from(format!("chip-press-{}", label.id)), chip, Some(on_long), Rc::default()).into_any_element(),
+                    long_press(
+                        SharedString::from(format!("chip-press-{}", label.id)),
+                        chip,
+                        Some(on_long),
+                        Rc::default(),
+                    )
+                    .into_any_element(),
                 );
             }
             chips.push(
@@ -635,7 +799,10 @@ impl Render for LibraryModal {
                     .debug_selector(|| "add-label".into())
                     .role(Role::Button)
                     .aria_label("ラベルを作る")
-                    .when_some(locked.clone(), |b, locked| b.aria_description(locked))
+                    .when_some(
+                        locked.clone(),
+                        gpui::StatefulInteractiveElement::aria_description,
+                    )
                     .focusable()
                     .tab_stop(locked.is_none())
                     .flex()
@@ -650,13 +817,20 @@ impl Render for LibraryModal {
                     .when(locked.is_some(), |b| b.opacity(0.5))
                     .when(locked.is_none(), |b| {
                         let hover = theme.hover_1;
-                        b.cursor_pointer()
-                            .hover(move |s| s.bg(hover))
-                            .on_click(cx.listener(|this, _, window, cx| this.ask_create(window, cx)))
+                        b.cursor_pointer().hover(move |s| s.bg(hover)).on_click(
+                            cx.listener(|this, _, window, cx| this.ask_create(window, cx)),
+                        )
                     })
                     .into_any_element(),
             );
-            div().id("chips").role(Role::Group).aria_label("ラベルで絞り込む").flex().flex_wrap().gap(SP_2).children(chips)
+            div()
+                .id("chips")
+                .role(Role::Group)
+                .aria_label("ラベルで絞り込む")
+                .flex()
+                .flex_wrap()
+                .gap(SP_2)
+                .children(chips)
         });
 
         let sign_in = self.library.as_ref().and_then(|l| l.sign_in.clone()).map(|shop| {
@@ -691,7 +865,9 @@ impl Render for LibraryModal {
         let partial = partial_reason(self.library.as_ref().and_then(|l| l.partial.as_deref()));
 
         let content = if let Some(failure) = self.failure.clone() {
-            super::widgets::text(failure).text_color(theme.danger).into_any_element()
+            super::widgets::text(failure)
+                .text_color(theme.danger)
+                .into_any_element()
         } else if self.library.is_none() {
             div()
                 .flex()
@@ -702,7 +878,9 @@ impl Render for LibraryModal {
                 .child("読み込んでいます…")
                 .into_any_element()
         } else if self.laid_out.0.is_empty() {
-            super::widgets::text("見つかりません").text_color(theme.muted).into_any_element()
+            super::widgets::text("見つかりません")
+                .text_color(theme.muted)
+                .into_any_element()
         } else {
             grid.into_any_element()
         };
@@ -721,28 +899,51 @@ impl Render for LibraryModal {
             .bg(theme.surface)
             .child(head)
             .children(chips)
-            .when_some(sign_in, |p, s| p.child(s))
-            .when(self.library.as_ref().is_some_and(|l| l.sign_in.is_none()), |p| {
-                p.when_some(partial, |p, partial| p.child(super::widgets::text(partial).text_size(FS_SM).text_color(theme.muted)))
-            })
-            .child(div().id("games").debug_selector(|| "games-area".into()).flex_1().min_h_0().child(content))
+            .when_some(sign_in, gpui::ParentElement::child)
+            .when(
+                self.library.as_ref().is_some_and(|l| l.sign_in.is_none()),
+                |p| {
+                    p.when_some(partial, |p, partial| {
+                        p.child(
+                            super::widgets::text(partial)
+                                .text_size(FS_SM)
+                                .text_color(theme.muted),
+                        )
+                    })
+                },
+            )
+            .child(
+                div()
+                    .id("games")
+                    .debug_selector(|| "games-area".into())
+                    .flex_1()
+                    .min_h_0()
+                    .child(content),
+            )
             .child(self.notice.render(&theme));
         let menu = self.menu.as_ref().map(|menu| {
             let entity = entity.clone();
-            menu.render(&theme, Rc::new(move |window, cx| {
+            let close: Act = Rc::new(move |window, cx| {
                 let _ = entity.update(cx, |this, cx| {
                     this.menu = None;
                     window.focus(&this.search.read(cx).focus_handle(cx), cx);
                     cx.notify();
                 });
-            }))
+            });
+            menu.render(&theme, &close)
         });
         let dialog = self.dialog.as_ref().map(|(view, _, _)| view.clone());
         // Over the whole panel, with its own menus and dialogs over it.
         div()
             .absolute()
             .inset_0()
-            .child(modal("library-layer", self.label.clone(), &theme, close, panel))
+            .child(modal(
+                "library-layer",
+                self.label.clone(),
+                &theme,
+                close,
+                panel,
+            ))
             .children(menu)
             .children(dialog)
     }

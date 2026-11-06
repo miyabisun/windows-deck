@@ -3,7 +3,7 @@
 //! keeps the session from then on; the window keeps none.
 //!
 //! The window runs in a process of its own (`windows-deck --login <shop> --link <url>`), so the
-//! panel itself never loads WebView2: the process prints the cookies, or why there are none,
+//! panel itself never loads `WebView2`: the process prints the cookies, or why there are none,
 //! as one line of JSON and exits.
 
 use std::{
@@ -103,16 +103,22 @@ pub fn session_cookie(cookie: &Cookie<'_>, site: &str) -> Option<SessionCookie> 
         value: cookie.value().to_owned(),
         domain: domain.to_owned(),
         path: cookie.path().unwrap_or("/").to_owned(),
-        expires: cookie.expires_datetime().map(|at| at.unix_timestamp()),
+        expires: cookie
+            .expires_datetime()
+            .map(wry::cookie::time::OffsetDateTime::unix_timestamp),
         secure: cookie.secure().unwrap_or(false),
         http_only: cookie.http_only().unwrap_or(false),
     })
 }
 
-/// Where WebView2 keeps its files: the folder the Tauri panel used, so none is added.
+/// Where `WebView2` keeps its files: the folder the Tauri panel used, so none is added.
 fn data_directory() -> Option<PathBuf> {
     let base = std::env::var_os("LOCALAPPDATA")?;
-    Some(PathBuf::from(base).join("io.github.miyabisun.windows-deck").join("EBWebView"))
+    Some(
+        PathBuf::from(base)
+            .join("io.github.miyabisun.windows-deck")
+            .join("EBWebView"),
+    )
 }
 
 enum Signal {
@@ -123,7 +129,9 @@ enum Signal {
 /// closed the window), print the cookies or why not, and return the exit code.
 pub fn run(shop: &str, link: &str) -> i32 {
     let Some(shop) = self::shop(shop) else {
-        return answer(&json!({ "error": "window", "message": format!("{shop} has no login window") }));
+        return answer(
+            &json!({ "error": "window", "message": format!("{shop} has no login window") }),
+        );
     };
     let event_loop = EventLoopBuilder::<Signal>::with_user_event().build();
     let window = match WindowBuilder::new()
@@ -138,7 +146,9 @@ pub fn run(shop: &str, link: &str) -> i32 {
         let size = window.outer_size();
         let area = monitor.size();
         let at = monitor.position();
-        let half = |whole: u32, part: u32| (i32::try_from(whole).unwrap_or(0) - i32::try_from(part).unwrap_or(0)) / 2;
+        let half = |whole: u32, part: u32| {
+            (i32::try_from(whole).unwrap_or(0) - i32::try_from(part).unwrap_or(0)) / 2
+        };
         window.set_outer_position(tao::dpi::PhysicalPosition::new(
             at.x + half(area.width, size.width),
             at.y + half(area.height, size.height),
@@ -151,7 +161,9 @@ pub fn run(shop: &str, link: &str) -> i32 {
         .with_url(shop.start)
         .with_incognito(true)
         .with_on_page_load_handler(move |event, url| {
-            if matches!(event, PageLoadEvent::Finished) && Url::parse(&url).is_ok_and(|url| signed_in(&url)) {
+            if matches!(event, PageLoadEvent::Finished)
+                && Url::parse(&url).is_ok_and(|url| signed_in(&url))
+            {
                 let _ = proxy.send_event(Signal::SignedIn);
             }
         })
@@ -168,20 +180,30 @@ pub fn run(shop: &str, link: &str) -> i32 {
         *flow = ControlFlow::Wait;
         let finish = |value: &Value, flow: &mut ControlFlow| {
             let code = answer(value);
-            *exit.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = code;
+            *exit
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = code;
             *flow = ControlFlow::ExitWithCode(code);
         };
         match event {
             Event::UserEvent(Signal::SignedIn) => match webview.cookies() {
                 Ok(cookies) => {
-                    let cookies: Vec<SessionCookie> =
-                        cookies.iter().filter_map(|cookie| session_cookie(cookie, site)).collect();
+                    let cookies: Vec<SessionCookie> = cookies
+                        .iter()
+                        .filter_map(|cookie| session_cookie(cookie, site))
+                        .collect();
                     info!(site, cookies = cookies.len(), "signed in to a shop");
                     finish(&json!({ "cookies": cookies }), flow);
                 }
-                Err(err) => finish(&json!({ "error": "window", "message": err.to_string() }), flow),
+                Err(err) => finish(
+                    &json!({ "error": "window", "message": err.to_string() }),
+                    flow,
+                ),
             },
-            Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => {
+            Event::WindowEvent {
+                event: WindowEvent::CloseRequested,
+                ..
+            } => {
                 finish(&json!({ "error": "closed" }), flow);
             }
             _ => {}
@@ -197,13 +219,15 @@ fn pin(window: &tao::window::Window, link: &str) {
         RawWindowHandle::Win32(h) => Some(h.hwnd.get()),
         _ => None,
     });
-    match handle {
-        Some(hwnd) => {
-            if ureq::post(&format!("{link}/windows/{hwnd}/pin")).send_empty().is_err() {
-                tracing::warn!("cannot show the login window on every desktop");
-            }
+    if let Some(hwnd) = handle {
+        if ureq::post(&format!("{link}/windows/{hwnd}/pin"))
+            .send_empty()
+            .is_err()
+        {
+            tracing::warn!("cannot show the login window on every desktop");
         }
-        None => tracing::warn!("the login window has no handle"),
+    } else {
+        tracing::warn!("the login window has no handle");
     }
     window.set_focus();
 }
@@ -219,7 +243,10 @@ pub struct LoginProcess;
 
 impl SignIn for LoginProcess {
     fn sign_in(&self, shop: &str, base: &str) -> Result<Value, ErrorBody> {
-        let window = |message: String| ErrorBody { error: Some("window".into()), message: Some(message) };
+        let window = |message: String| ErrorBody {
+            error: Some("window".into()),
+            message: Some(message),
+        };
         let exe = std::env::current_exe().map_err(|err| window(err.to_string()))?;
         let output = Command::new(exe)
             .args([LOGIN, shop, LINK, base])
@@ -233,10 +260,17 @@ impl SignIn for LoginProcess {
             .lines()
             .rev()
             .find_map(|line| serde_json::from_str(line).ok())
-            .ok_or_else(|| window(format!("the login window ended without an answer ({})", output.status)))?;
+            .ok_or_else(|| {
+                window(format!(
+                    "the login window ended without an answer ({})",
+                    output.status
+                ))
+            })?;
         match answer.get("cookies") {
             Some(cookies) => Ok(cookies.clone()),
-            None => Err(serde_json::from_value(answer).unwrap_or_else(|_| ErrorBody::named("window"))),
+            None => {
+                Err(serde_json::from_value(answer).unwrap_or_else(|_| ErrorBody::named("window")))
+            }
         }
     }
 }

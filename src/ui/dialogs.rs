@@ -5,15 +5,19 @@ use std::{rc::Rc, time::Duration};
 
 use gpui::{
     AnyView, App, AppContext as _, ClipboardItem, Context, DismissEvent, Entity, EventEmitter,
-    FocusHandle, Focusable, FontWeight, IntoElement, ParentElement, Point, Pixels, Render, Role,
+    FocusHandle, Focusable, FontWeight, IntoElement, ParentElement, Pixels, Point, Render, Role,
     SharedString, Styled, Subscription, Task, WeakEntity, Window, div, prelude::*, px,
 };
 
 use super::{
     icons::{glyph, spinner},
     text_input::{Changed, TextInput},
-    theme::{CONTROL_HEIGHT, FS_LABEL, FS_SM, MONO, RADIUS_MD, ROW_HEIGHT, SP_2, SP_3, SP_4, Theme},
-    widgets::{Menu, MenuItem, Notice, dialog_head, modal, outlined_button},
+    theme::{
+        CONTROL_HEIGHT, FS_LABEL, FS_SM, MONO, RADIUS_MD, ROW_HEIGHT, SP_2, SP_3, SP_4, Theme,
+    },
+    widgets::{
+        Act, Menu, MenuItem, Notice, OnStarted, OnText, dialog_head, modal, outlined_button,
+    },
 };
 use crate::{
     link::{Link, Started, item_key},
@@ -26,7 +30,14 @@ use crate::{
 
 /// Where a dialog opens and reports back: the panel or the library list.
 pub trait Host: 'static + Sized {
-    fn open_dialog(&mut self, view: AnyView, focus: FocusHandle, subscription: Subscription, window: &mut Window, cx: &mut Context<Self>);
+    fn open_dialog(
+        &mut self,
+        view: AnyView,
+        focus: FocusHandle,
+        subscription: Subscription,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    );
     fn close_dialog(&mut self, window: &mut Window, cx: &mut Context<Self>);
     fn tell(&mut self, text: String, cx: &mut Context<Self>);
     /// The game's labels or pin changed; read the list again.
@@ -41,14 +52,18 @@ pub fn open<H: Host, V: Render + Focusable + EventEmitter<DismissEvent>>(
     cx: &mut Context<H>,
 ) {
     let focus = view.read(cx).focus_handle(cx);
-    let subscription = cx.subscribe_in(&view, window, |host: &mut H, _, _: &DismissEvent, window, cx| {
-        host.close_dialog(window, cx);
-    });
+    let subscription = cx.subscribe_in(
+        &view,
+        window,
+        |host: &mut H, _, _: &DismissEvent, window, cx| {
+            host.close_dialog(window, cx);
+        },
+    );
     host.open_dialog(view.into(), focus.clone(), subscription, window, cx);
     window.focus(&focus, cx);
 }
 
-fn closer<V: EventEmitter<DismissEvent>>(cx: &Context<V>) -> Rc<dyn Fn(&mut Window, &mut App)> {
+fn closer<V: EventEmitter<DismissEvent>>(cx: &Context<V>) -> Act {
     let this = cx.entity().downgrade();
     Rc::new(move |_, cx| {
         let _ = this.update(cx, |_, cx| cx.emit(DismissEvent));
@@ -77,27 +92,49 @@ pub fn game_menu<H: Host>(
     at: Point<Pixels>,
     cx: &App,
 ) -> Menu {
-    let library = link.read(cx).buttons.iter().find(|b| b.id == button).and_then(|b| match &b.state {
-        crate::model::protocol::State::Library(library) => Some(library.clone()),
-        _ => None,
-    });
+    let library = link
+        .read(cx)
+        .buttons
+        .iter()
+        .find(|b| b.id == button)
+        .and_then(|b| match &b.state {
+            crate::model::protocol::State::Library(library) => Some(library.clone()),
+            _ => None,
+        });
     let keys = library.as_ref().is_some_and(|l| l.license_keys);
-    let page = game.page.unwrap_or_else(|| library.as_ref().is_some_and(|l| l.pages));
+    let page = game
+        .page
+        .unwrap_or_else(|| library.as_ref().is_some_and(|l| l.pages));
     let mut items = Vec::new();
     {
-        let (host, link, button, game) = (host.clone(), link.clone(), button.to_owned(), game.clone());
-        items.push(MenuItem::new(if pinned { "TOPから外す" } else { "TOPに固定" }, move |_, cx| {
-            let task = link.update(cx, |l, cx| l.set_pinned(&button, &game.id, !pinned, cx));
-            let (host, name) = (host.clone(), game.name.clone());
-            cx.spawn(async move |cx| {
-                // A failure stays on the game's tile (Link keeps it).
-                if task.await.is_none() {
-                    let text = format!("「{name}」を TOP {}", if pinned { "から外しました" } else { "に固定しました" });
-                    let _ = host.update(cx, |host, cx| host.tell(text, cx));
-                }
-            })
-            .detach();
-        }));
+        let (host, link, button, game) =
+            (host.clone(), link.clone(), button.to_owned(), game.clone());
+        items.push(MenuItem::new(
+            if pinned {
+                "TOPから外す"
+            } else {
+                "TOPに固定"
+            },
+            move |_, cx| {
+                let task = link.update(cx, |l, cx| l.set_pinned(&button, &game.id, !pinned, cx));
+                let (host, name) = (host.clone(), game.name.clone());
+                cx.spawn(async move |cx| {
+                    // A failure stays on the game's tile (Link keeps it).
+                    if task.await.is_none() {
+                        let text = format!(
+                            "「{name}」を TOP {}",
+                            if pinned {
+                                "から外しました"
+                            } else {
+                                "に固定しました"
+                            }
+                        );
+                        let _ = host.update(cx, |host, cx| host.tell(text, cx));
+                    }
+                })
+                .detach();
+            },
+        ));
     }
     {
         let (link, button, id) = (link.clone(), button.to_owned(), game.id.clone());
@@ -117,7 +154,8 @@ pub fn game_menu<H: Host>(
         }));
     }
     {
-        let (host, link, button, game) = (host.clone(), link.clone(), button.to_owned(), game.clone());
+        let (host, link, button, game) =
+            (host.clone(), link.clone(), button.to_owned(), game.clone());
         items.push(MenuItem::new("ラベル設定", move |window, cx| {
             let (link, button, game) = (link.clone(), button.clone(), game.clone());
             let changed = host.clone();
@@ -128,14 +166,19 @@ pub fn game_menu<H: Host>(
         }));
     }
     if game.choosable {
-        let (host, link, button, game) = (host.clone(), link.clone(), button.to_owned(), game.clone());
-        items.push(MenuItem::new("起動ファイルを選ぶ", move |window, cx| {
-            let (link, button, game) = (link.clone(), button.clone(), game.clone());
-            let _ = host.update(cx, |host, cx| {
-                let chooser = cx.new(|cx| ProgramChooser::new(link, button, game.id, game.name, None, cx));
-                open(host, chooser, window, cx);
-            });
-        }));
+        let (host, link, button, game) =
+            (host.clone(), link.clone(), button.to_owned(), game.clone());
+        items.push(MenuItem::new(
+            "起動ファイルを選ぶ",
+            move |window, cx| {
+                let (link, button, game) = (link.clone(), button.clone(), game.clone());
+                let _ = host.update(cx, |host, cx| {
+                    let chooser = cx
+                        .new(|cx| ProgramChooser::new(link, button, game.id, game.name, None, cx));
+                    open(host, chooser, window, cx);
+                });
+            },
+        ));
     }
     if keys {
         let (host, link, button, game) = (host, link.clone(), button.to_owned(), game.clone());
@@ -199,7 +242,11 @@ fn failure<T: Into<SharedString>>(text: T, theme: &Theme) -> impl IntoElement + 
 }
 
 /// A row to choose (a label's check, a program's mark): as tall as a tab.
-fn choice_row(id: impl Into<gpui::ElementId>, label: SharedString, theme: &Theme) -> gpui::Stateful<gpui::Div> {
+fn choice_row(
+    id: impl Into<gpui::ElementId>,
+    label: SharedString,
+    theme: &Theme,
+) -> gpui::Stateful<gpui::Div> {
     let selector = label.clone();
     div()
         .id(id)
@@ -215,7 +262,10 @@ fn choice_row(id: impl Into<gpui::ElementId>, label: SharedString, theme: &Theme
         .text_size(FS_LABEL)
         .rounded(RADIUS_MD)
         .cursor_pointer()
-        .hover({ let c = theme.hover_1; move |s| s.bg(c) })
+        .hover({
+            let c = theme.hover_1;
+            move |s| s.bg(c)
+        })
 }
 
 /// A 28px mark: a check box, or a round radio mark.
@@ -228,9 +278,12 @@ fn mark(on: bool, round: bool, theme: &Theme) -> impl IntoElement + use<> {
         .size(px(28.))
         .border_2()
         .border_color(if on { theme.accent } else { theme.border })
-        .when(round, |m| m.rounded_full())
+        .when(round, gpui::Styled::rounded_full)
         .when(!round, |m| m.rounded(px(6.)))
-        .when(on, |m| m.bg(theme.accent_subtle).child(glyph(Glyph::Check, px(20.), theme.accent)))
+        .when(on, |m| {
+            m.bg(theme.accent_subtle)
+                .child(glyph(Glyph::Check, px(20.), theme.accent))
+        })
 }
 
 /// Asks for a name (with `value`), or asks to confirm.
@@ -240,7 +293,7 @@ pub struct AskDialog {
     input: Option<Entity<TextInput>>,
     confirm: SharedString,
     danger: bool,
-    on_confirm: Rc<dyn Fn(String, &mut Window, &mut App)>,
+    on_confirm: OnText,
     focus: FocusHandle,
     _changes: Option<Subscription>,
 }
@@ -249,9 +302,10 @@ impl EventEmitter<DismissEvent> for AskDialog {}
 
 impl Focusable for AskDialog {
     fn focus_handle(&self, cx: &App) -> FocusHandle {
-        self.input
-            .as_ref()
-            .map_or_else(|| self.focus.clone(), |input| input.read(cx).focus_handle(cx))
+        self.input.as_ref().map_or_else(
+            || self.focus.clone(),
+            |input| input.read(cx).focus_handle(cx),
+        )
     }
 }
 
@@ -267,7 +321,9 @@ impl AskDialog {
     ) -> Self {
         let title = title.into();
         let input = value.map(|value| cx.new(|cx| TextInput::new(title.clone(), value, cx)));
-        let changes = input.as_ref().map(|input| cx.subscribe(input, |_, _, _: &Changed, cx| cx.notify()));
+        let changes = input
+            .as_ref()
+            .map(|input| cx.subscribe(input, |_, _, _: &Changed, cx| cx.notify()));
         Self {
             title,
             message: message.map(|m| m.to_owned().into()),
@@ -281,7 +337,10 @@ impl AskDialog {
     }
 
     fn text(&self, cx: &App) -> String {
-        self.input.as_ref().map(|i| i.read(cx).text().trim().to_owned()).unwrap_or_default()
+        self.input
+            .as_ref()
+            .map(|i| i.read(cx).text().trim().to_owned())
+            .unwrap_or_default()
     }
 
     fn ready(&self, cx: &App) -> bool {
@@ -303,7 +362,11 @@ impl Render for AskDialog {
         let theme = Theme::get(cx);
         let close = closer(cx);
         let ready = self.ready(cx);
-        let color = if self.danger { theme.danger } else { theme.accent };
+        let color = if self.danger {
+            theme.danger
+        } else {
+            theme.accent
+        };
         let composing = self.input.clone();
         let panel = div()
             .id("ask")
@@ -316,15 +379,26 @@ impl Render for AskDialog {
             .flex_col()
             .gap(SP_3)
             .bg(theme.surface_raised)
-            .on_key_down(cx.listener(move |this, event: &gpui::KeyDownEvent, window, cx| {
-                let composing = composing.as_ref().is_some_and(|i| i.read(cx).is_composing());
-                if event.keystroke.key == "enter" && !composing {
-                    cx.stop_propagation();
-                    this.submit(window, cx);
-                }
-            }))
-            .child(div().text_size(FS_LABEL).font_weight(FontWeight::SEMIBOLD).child(self.title.clone()))
-            .when_some(self.message.clone(), |panel, message| panel.child(note(message, &theme)))
+            .on_key_down(
+                cx.listener(move |this, event: &gpui::KeyDownEvent, window, cx| {
+                    let composing = composing
+                        .as_ref()
+                        .is_some_and(|i| i.read(cx).is_composing());
+                    if event.keystroke.key == "enter" && !composing {
+                        cx.stop_propagation();
+                        this.submit(window, cx);
+                    }
+                }),
+            )
+            .child(
+                div()
+                    .text_size(FS_LABEL)
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child(self.title.clone()),
+            )
+            .when_some(self.message.clone(), |panel, message| {
+                panel.child(note(message, &theme))
+            })
             .when_some(self.input.clone(), |panel, input| {
                 panel.child(
                     div()
@@ -343,10 +417,14 @@ impl Render for AskDialog {
                     .flex()
                     .justify_end()
                     .gap(SP_3)
-                    .child(outlined_button("cancel", "やめる", theme.border, &theme).text_color(theme.on_surface).on_click({
-                        let close = close.clone();
-                        move |_, window, cx| close(window, cx)
-                    }))
+                    .child(
+                        outlined_button("cancel", "やめる", theme.border, &theme)
+                            .text_color(theme.on_surface)
+                            .on_click({
+                                let close = close.clone();
+                                move |_, window, cx| close(window, cx)
+                            }),
+                    )
                     .child(
                         outlined_button("confirm", self.confirm.clone(), color, &theme)
                             .when(!ready, |b| b.opacity(0.5))
@@ -364,7 +442,7 @@ pub struct ProgramChooser {
     id: String,
     name: String,
     /// Start the game once chosen, then call this with its name.
-    start: Option<Rc<dyn Fn(String, &mut App)>>,
+    start: Option<OnStarted>,
     programs: Option<Programs>,
     failure: Option<String>,
     busy: bool,
@@ -386,7 +464,7 @@ impl ProgramChooser {
         button: String,
         id: String,
         name: String,
-        start: Option<Rc<dyn Fn(String, &mut App)>>,
+        start: Option<OnStarted>,
         cx: &mut Context<Self>,
     ) -> Self {
         let read = link.update(cx, |l, cx| l.programs(&button, &id, cx));
@@ -400,17 +478,34 @@ impl ProgramChooser {
                 cx.notify();
             });
         });
-        Self { link, button, id, name, start, programs: None, failure: None, busy: false, focus: cx.focus_handle(), _load: load }
+        Self {
+            link,
+            button,
+            id,
+            name,
+            start,
+            programs: None,
+            failure: None,
+            busy: false,
+            focus: cx.focus_handle(),
+            _load: load,
+        }
     }
 
-    fn choose(&mut self, program: String, cx: &mut Context<Self>) {
+    fn choose(&mut self, program: &str, cx: &mut Context<Self>) {
         if self.busy {
             return;
         }
         self.busy = true;
         cx.notify();
-        let (link, button, id, name, start) = (self.link.clone(), self.button.clone(), self.id.clone(), self.name.clone(), self.start.clone());
-        let chosen = link.update(cx, |l, cx| l.choose_program(&button, &id, &program, cx));
+        let (link, button, id, name, start) = (
+            self.link.clone(),
+            self.button.clone(),
+            self.id.clone(),
+            self.name.clone(),
+            self.start.clone(),
+        );
+        let chosen = link.update(cx, |l, cx| l.choose_program(&button, &id, program, cx));
         cx.spawn(async move |this, cx| {
             let failure = chosen.await;
             let started = if failure.is_none() && start.is_some() {
@@ -421,7 +516,7 @@ impl ProgramChooser {
             };
             let _ = this.update(cx, |this, cx| {
                 this.busy = false;
-                this.failure = failure.clone();
+                this.failure.clone_from(&failure);
                 cx.notify();
                 if failure.is_none() {
                     cx.emit(DismissEvent);
@@ -440,21 +535,30 @@ impl Render for ProgramChooser {
         let theme = Theme::get(cx);
         let close = closer(cx);
         let rows = self.programs.clone().map(|programs| {
-            programs.candidates.into_iter().enumerate().map(|(index, program)| {
-                let on = programs.chosen.as_deref() == Some(program.as_str());
-                let chosen = program.clone();
-                choice_row(("program", index), program.clone().into(), &theme)
-                    .role(Role::RadioButton)
-                    .aria_toggled(on.into())
-                    .when(self.busy, |row| row.opacity(0.5))
-                    .on_click(cx.listener(move |this, _, _, cx| this.choose(chosen.clone(), cx)))
-                    .when(on, |row| {
-                        let name = program.clone();
-                        row.child(div().absolute().debug_selector(move || format!("on-{name}")))
-                    })
-                    .child(mark(on, true, &theme))
-                    .child(program)
-            }).collect::<Vec<_>>()
+            programs
+                .candidates
+                .into_iter()
+                .enumerate()
+                .map(|(index, program)| {
+                    let on = programs.chosen.as_deref() == Some(program.as_str());
+                    let chosen = program.clone();
+                    choice_row(("program", index), program.clone().into(), &theme)
+                        .role(Role::RadioButton)
+                        .aria_toggled(on.into())
+                        .when(self.busy, |row| row.opacity(0.5))
+                        .on_click(cx.listener(move |this, _, _, cx| this.choose(&chosen, cx)))
+                        .when(on, |row| {
+                            let name = program.clone();
+                            row.child(
+                                div()
+                                    .absolute()
+                                    .debug_selector(move || format!("on-{name}")),
+                            )
+                        })
+                        .child(mark(on, true, &theme))
+                        .child(program)
+                })
+                .collect::<Vec<_>>()
         });
         let panel = div()
             .id("programs")
@@ -466,16 +570,27 @@ impl Render for ProgramChooser {
             .flex_col()
             .gap(SP_2)
             .bg(theme.surface_raised)
-            .child(dialog_head(format!("起動ファイルを選ぶ: {}", self.name), &theme, close.clone()))
-            .child(note("選んだファイルを覚えて、次からはそれで起動します。", &theme))
+            .child(dialog_head(
+                format!("起動ファイルを選ぶ: {}", self.name),
+                &theme,
+                close.clone(),
+            ))
+            .child(note(
+                "選んだファイルを覚えて、次からはそれで起動します。",
+                &theme,
+            ))
             .when_some(self.failure.clone(), |p, f| p.child(failure(f, &theme)))
-            .when(self.programs.is_none() && self.failure.is_none(), |p| p.child(loading("読み込んでいます…", &theme)))
-            .when_some(rows, |p, rows| p.child(div().flex().flex_col().children(rows)));
+            .when(self.programs.is_none() && self.failure.is_none(), |p| {
+                p.child(loading("読み込んでいます…", &theme))
+            })
+            .when_some(rows, |p, rows| {
+                p.child(div().flex().flex_col().children(rows))
+            });
         modal("programs-layer", "起動ファイルを選ぶ", &theme, close, panel)
     }
 }
 
-/// A game's license keys, read from DLsite, to copy into the game.
+/// A game's license keys, read from `DLsite`, to copy into the game.
 pub struct KeysDialog {
     name: String,
     keys: Option<Vec<LicenseKey>>,
@@ -494,7 +609,14 @@ impl Focusable for KeysDialog {
 }
 
 impl KeysDialog {
-    pub fn new(link: Entity<Link>, button: String, id: String, name: String, cx: &mut Context<Self>) -> Self {
+    #[allow(clippy::needless_pass_by_value)] // Built from what the menu hands over.
+    pub fn new(
+        link: Entity<Link>,
+        button: String,
+        id: String,
+        name: String,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let read = link.update(cx, |l, cx| l.license_keys(&button, &id, cx));
         let load = cx.spawn(async move |this, cx| {
             let read = read.await;
@@ -506,7 +628,14 @@ impl KeysDialog {
                 cx.notify();
             });
         });
-        Self { name, keys: None, failure: None, notice: Notice::default(), focus: cx.focus_handle(), _load: load }
+        Self {
+            name,
+            keys: None,
+            failure: None,
+            notice: Notice::default(),
+            focus: cx.focus_handle(),
+            _load: load,
+        }
     }
 }
 
@@ -536,8 +665,17 @@ impl Render for KeysDialog {
                                     .min_w_0()
                                     .flex()
                                     .flex_col()
-                                    .child(div().text_size(FS_SM).text_color(theme.muted).child(key.label.clone()))
-                                    .child(super::widgets::text(key.value).font_family(MONO).text_size(px(28.))),
+                                    .child(
+                                        div()
+                                            .text_size(FS_SM)
+                                            .text_color(theme.muted)
+                                            .child(key.label.clone()),
+                                    )
+                                    .child(
+                                        super::widgets::text(key.value)
+                                            .font_family(MONO)
+                                            .text_size(px(28.)),
+                                    ),
                             )
                             .child(
                                 outlined_button(("copy", index), "コピー", theme.accent, &theme)
@@ -546,8 +684,14 @@ impl Render for KeysDialog {
                                     .min_w(px(120.))
                                     .bg(theme.accent_subtle)
                                     .on_click(cx.listener(move |this, _, _, cx| {
-                                        cx.write_to_clipboard(ClipboardItem::new_string(value.clone()));
-                                        this.notice.show("コピーしました", cx, |this: &mut Self| &mut this.notice);
+                                        cx.write_to_clipboard(ClipboardItem::new_string(
+                                            value.clone(),
+                                        ));
+                                        this.notice.show(
+                                            "コピーしました",
+                                            cx,
+                                            |this: &mut Self| &mut this.notice,
+                                        );
                                     })),
                             )
                     }))
@@ -567,7 +711,11 @@ impl Render for KeysDialog {
             .flex_col()
             .gap(SP_3)
             .bg(theme.surface_raised)
-            .child(dialog_head(format!("シリアル番号: {}", self.name), &theme, close.clone()))
+            .child(dialog_head(
+                format!("シリアル番号: {}", self.name),
+                &theme,
+                close.clone(),
+            ))
             .child(body);
         modal("keys-layer", "シリアル番号", &theme, close, panel)
     }
@@ -585,8 +733,8 @@ pub struct LabelPicker<H: Host> {
     busy: Option<String>,
     ask: Option<Entity<AskDialog>>,
     focus: FocusHandle,
-    _tasks: Vec<Task<()>>,
-    _ask: Option<Subscription>,
+    tasks: Vec<Task<()>>,
+    ask_closed: Option<Subscription>,
 }
 
 impl<H: Host> EventEmitter<DismissEvent> for LabelPicker<H> {}
@@ -598,15 +746,34 @@ impl<H: Host> Focusable for LabelPicker<H> {
 }
 
 impl<H: Host> LabelPicker<H> {
-    pub fn new(link: Entity<Link>, button: String, game: MenuGame, host: WeakEntity<H>, _window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let mut picker = Self { link, button, game, host, library: None, failure: None, busy: None, ask: None, focus: cx.focus_handle(), _tasks: Vec::new(), _ask: None };
+    pub fn new(
+        link: Entity<Link>,
+        button: String,
+        game: MenuGame,
+        host: WeakEntity<H>,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let mut picker = Self {
+            link,
+            button,
+            game,
+            host,
+            library: None,
+            failure: None,
+            busy: None,
+            ask: None,
+            focus: cx.focus_handle(),
+            tasks: Vec::new(),
+            ask_closed: None,
+        };
         picker.load(cx);
         picker
     }
 
     fn load(&mut self, cx: &mut Context<Self>) {
         let read = self.link.update(cx, |l, cx| l.library(&self.button, cx));
-        self._tasks.push(cx.spawn(async move |this, cx| {
+        self.tasks.push(cx.spawn(async move |this, cx| {
             let read = read.await;
             let _ = this.update(cx, |this, cx| {
                 match read {
@@ -630,16 +797,20 @@ impl<H: Host> LabelPicker<H> {
     }
 
     fn locked(&self) -> Option<String> {
-        labels_locked_reason(self.library.as_ref().and_then(|l| l.labels_locked.as_deref()))
+        labels_locked_reason(
+            self.library
+                .as_ref()
+                .and_then(|l| l.labels_locked.as_deref()),
+        )
     }
 
     fn after(&mut self, change: Task<Option<String>>, window: &mut Window, cx: &mut Context<Self>) {
         let host = self.host.clone();
-        self._tasks.push(cx.spawn_in(window, async move |this, cx| {
+        self.tasks.push(cx.spawn_in(window, async move |this, cx| {
             let failure = change.await;
             let _ = this.update_in(cx, |this, window, cx| {
                 this.busy = None;
-                this.failure = failure.clone();
+                this.failure.clone_from(&failure);
                 if failure.is_none() {
                     this.load(cx);
                     let _ = host.update(cx, |host, cx| host.changed(window, cx));
@@ -649,22 +820,24 @@ impl<H: Host> LabelPicker<H> {
         }));
     }
 
-    fn toggle(&mut self, label: String, window: &mut Window, cx: &mut Context<Self>) {
+    fn toggle(&mut self, label: &str, window: &mut Window, cx: &mut Context<Self>) {
         if self.busy.is_some() || self.locked().is_some() {
             return;
         }
-        let on = !self.chosen().contains(&label);
-        self.busy = Some(label.clone());
+        let on = !self.chosen().iter().any(|l| l == label);
+        self.busy = Some(label.to_owned());
         cx.notify();
-        let change = self.link.update(cx, |l, cx| l.set_label(&self.button, &label, &self.game.id, on, cx));
+        let change = self.link.update(cx, |l, cx| {
+            l.set_label(&self.button, label, &self.game.id, on, cx)
+        });
         self.after(change, window, cx);
     }
 
-    fn create(&mut self, name: String, window: &mut Window, cx: &mut Context<Self>) {
+    fn create(&mut self, name: &str, window: &mut Window, cx: &mut Context<Self>) {
         self.busy = Some("new".into());
         cx.notify();
         let (link, button, id) = (self.link.clone(), self.button.clone(), self.game.id.clone());
-        let made = link.update(cx, |l, cx| l.create_label(&button, &name, cx));
+        let made = link.update(cx, |l, cx| l.create_label(&button, name, cx));
         let change = cx.spawn(async move |_, cx| match made.await {
             Ok(label) => {
                 let put = link.update(cx, |l, cx| l.set_label(&button, &label.id, &id, true, cx));
@@ -678,15 +851,26 @@ impl<H: Host> LabelPicker<H> {
     fn ask_name(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let this = cx.entity().downgrade();
         let ask = cx.new(|cx| {
-            AskDialog::new("新しいラベル", None, Some(""), "作って付ける", false, move |name, window, cx| {
-                let _ = this.update(cx, |this, cx| this.create(name, window, cx));
-            }, cx)
+            AskDialog::new(
+                "新しいラベル",
+                None,
+                Some(""),
+                "作って付ける",
+                false,
+                move |name, window, cx| {
+                    let _ = this.update(cx, |this, cx| this.create(&name, window, cx));
+                },
+                cx,
+            )
         });
-        self._ask = Some(cx.subscribe_in(&ask, window, |this, _, _: &DismissEvent, window, cx| {
-            this.ask = None;
-            window.focus(&this.focus, cx);
-            cx.notify();
-        }));
+        self.ask_closed =
+            Some(
+                cx.subscribe_in(&ask, window, |this, _, _: &DismissEvent, window, cx| {
+                    this.ask = None;
+                    window.focus(&this.focus, cx);
+                    cx.notify();
+                }),
+            );
         let focus = ask.read(cx).focus_handle(cx);
         self.ask = Some(ask);
         window.focus(&focus, cx);
@@ -701,24 +885,36 @@ impl<H: Host> Render for LabelPicker<H> {
         let locked = self.locked();
         let chosen = self.chosen();
         let rows = self.library.clone().map(|library| {
-            let mut rows: Vec<gpui::AnyElement> = library.labels.into_iter().map(|label| {
-                let on = chosen.contains(&label.id);
-                let id = label.id.clone();
-                let busy = self.busy.as_deref() == Some(label.id.as_str());
-                choice_row(SharedString::from(format!("label-{}", label.id)), label.name.clone().into(), &theme)
+            let mut rows: Vec<gpui::AnyElement> = library
+                .labels
+                .into_iter()
+                .map(|label| {
+                    let on = chosen.contains(&label.id);
+                    let id = label.id.clone();
+                    let busy = self.busy.as_deref() == Some(label.id.as_str());
+                    choice_row(
+                        SharedString::from(format!("label-{}", label.id)),
+                        label.name.clone().into(),
+                        &theme,
+                    )
                     .role(Role::CheckBox)
                     .aria_toggled(on.into())
                     .when(locked.is_some(), |row| row.opacity(0.5))
-                    .on_click(cx.listener(move |this, _, window, cx| this.toggle(id.clone(), window, cx)))
+                    .on_click(cx.listener(move |this, _, window, cx| this.toggle(&id, window, cx)))
                     .when(on, |row| {
                         let name = label.name.clone();
-                        row.child(div().absolute().debug_selector(move || format!("on-{name}")))
+                        row.child(
+                            div()
+                                .absolute()
+                                .debug_selector(move || format!("on-{name}")),
+                        )
                     })
                     .child(mark(on, false, &theme))
                     .child(label.name)
                     .when(busy, |row| row.child(spinner(theme.accent)))
                     .into_any_element()
-            }).collect();
+                })
+                .collect();
             rows.push(
                 choice_row("new-label", "新しいラベル".into(), &theme)
                     .role(Role::Button)
@@ -728,9 +924,19 @@ impl<H: Host> Render for LabelPicker<H> {
                             this.ask_name(window, cx);
                         }
                     }))
-                    .child(div().flex().flex_none().items_center().justify_center().size(px(28.)).child(glyph(Glyph::Plus, px(24.), theme.on_surface)))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_none()
+                            .items_center()
+                            .justify_center()
+                            .size(px(28.))
+                            .child(glyph(Glyph::Plus, px(24.), theme.on_surface)),
+                    )
                     .child("新しいラベル")
-                    .when(self.busy.as_deref() == Some("new"), |row| row.child(spinner(theme.accent)))
+                    .when(self.busy.as_deref() == Some("new"), |row| {
+                        row.child(spinner(theme.accent))
+                    })
                     .into_any_element(),
             );
             rows
@@ -747,11 +953,19 @@ impl<H: Host> Render for LabelPicker<H> {
             .flex_col()
             .gap(SP_2)
             .bg(theme.surface_raised)
-            .child(dialog_head(format!("ラベル設定: {}", self.game.name), &theme, close.clone()))
+            .child(dialog_head(
+                format!("ラベル設定: {}", self.game.name),
+                &theme,
+                close.clone(),
+            ))
             .when_some(locked, |p, locked| p.child(note(locked, &theme)))
             .when_some(self.failure.clone(), |p, f| p.child(failure(f, &theme)))
-            .when(self.library.is_none() && self.failure.is_none(), |p| p.child(loading("読み込んでいます…", &theme)))
-            .when_some(rows, |p, rows| p.child(div().flex().flex_col().children(rows)));
+            .when(self.library.is_none() && self.failure.is_none(), |p| {
+                p.child(loading("読み込んでいます…", &theme))
+            })
+            .when_some(rows, |p, rows| {
+                p.child(div().flex().flex_col().children(rows))
+            });
         div()
             .absolute()
             .inset_0()
@@ -809,57 +1023,87 @@ impl RoundDialog {
             }
         });
         let observed = cx.observe(&link, |_, _, cx| cx.notify());
-        Self { link, button, label, round: None, failure: None, focus: cx.focus_handle(), _poll: poll, _link: observed }
+        Self {
+            link,
+            button,
+            label,
+            round: None,
+            failure: None,
+            focus: cx.focus_handle(),
+            _poll: poll,
+            _link: observed,
+        }
     }
 }
 
 impl Render for RoundDialog {
+    #[allow(clippy::too_many_lines)] // One dialog, top to bottom.
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = Theme::get(cx);
         let close = closer(cx);
-        let summary = self.round.as_ref().map(|round| round_summary(round, &chrono::Local));
+        let summary = self
+            .round
+            .as_ref()
+            .map(|round| round_summary(round, &chrono::Local));
         let link = self.link.read(cx);
         let pending = link.pending.contains(&self.button);
         let button_failure = link.failures.get(&self.button).cloned();
         let busy = summary.as_ref().is_some_and(|s| s.busy) || pending || !link.connected();
-        let body = if let Some(f) = self.failure.clone() {
-            failure(f, &theme).into_any_element()
-        } else if let (Some(summary), Some(round)) = (summary, self.round.clone()) {
-            div()
-                .flex()
-                .flex_col()
-                .gap(SP_3)
-                .child(
-                    div()
-                        .id("state")
-                        .role(Role::Status)
-                        .aria_label(summary.text.clone())
-                        .flex()
-                        .items_center()
-                        .gap(SP_2)
-                        .text_size(FS_LABEL)
-                        .when(summary.busy, |s| s.child(spinner(theme.accent)))
-                        .child(super::widgets::text(summary.text)),
-                )
-                .when_some(summary.failure, |b, f| b.child(failure(f, &theme)))
-                .when(!round.jobs.is_empty(), |b| {
-                    b.child(div().flex().flex_col().children(round.jobs.into_iter().map(|job| {
-                        let failed = job.status.contains("失敗");
+        let body =
+            if let Some(f) = self.failure.clone() {
+                failure(f, &theme).into_any_element()
+            } else if let (Some(summary), Some(round)) = (summary, self.round.clone()) {
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(SP_3)
+                    .child(
                         div()
+                            .id("state")
+                            .role(Role::Status)
+                            .aria_label(summary.text.clone())
                             .flex()
                             .items_center()
-                            .gap(SP_4)
-                            .min_h(ROW_HEIGHT)
-                            .border_t_1()
-                            .border_color(theme.border)
-                            .child(div().flex_1().min_w_0().truncate().child(super::widgets::text(job.name)))
-                            .child(super::widgets::text(job.status).text_size(FS_SM).text_color(if failed { theme.danger } else { theme.muted }))
-                    })))
-                })
-                .into_any_element()
-        } else {
-            loading("読み込んでいます…", &theme).into_any_element()
-        };
+                            .gap(SP_2)
+                            .text_size(FS_LABEL)
+                            .when(summary.busy, |s| s.child(spinner(theme.accent)))
+                            .child(super::widgets::text(summary.text)),
+                    )
+                    .when_some(summary.failure, |b, f| b.child(failure(f, &theme)))
+                    .when(!round.jobs.is_empty(), |b| {
+                        b.child(div().flex().flex_col().children(round.jobs.into_iter().map(
+                            |job| {
+                                let failed = job.status.contains("失敗");
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap(SP_4)
+                                    .min_h(ROW_HEIGHT)
+                                    .border_t_1()
+                                    .border_color(theme.border)
+                                    .child(
+                                        div()
+                                            .flex_1()
+                                            .min_w_0()
+                                            .truncate()
+                                            .child(super::widgets::text(job.name)),
+                                    )
+                                    .child(
+                                        super::widgets::text(job.status)
+                                            .text_size(FS_SM)
+                                            .text_color(if failed {
+                                                theme.danger
+                                            } else {
+                                                theme.muted
+                                            }),
+                                    )
+                            },
+                        )))
+                    })
+                    .into_any_element()
+            } else {
+                loading("読み込んでいます…", &theme).into_any_element()
+            };
         let panel = div()
             .id("round")
             .track_focus(&self.focus)
@@ -872,7 +1116,11 @@ impl Render for RoundDialog {
             .flex_col()
             .gap(SP_3)
             .bg(theme.surface_raised)
-            .child(dialog_head(format!("更新の状況: {}", self.label), &theme, close.clone()))
+            .child(dialog_head(
+                format!("更新の状況: {}", self.label),
+                &theme,
+                close.clone(),
+            ))
             .child(body)
             .child(
                 div()
@@ -880,7 +1128,9 @@ impl Render for RoundDialog {
                     .items_center()
                     .justify_end()
                     .gap(SP_3)
-                    .when_some(button_failure, |a, f| a.child(div().flex_1().child(failure(f, &theme))))
+                    .when_some(button_failure, |a, f| {
+                        a.child(div().flex_1().child(failure(f, &theme)))
+                    })
                     .child(
                         outlined_button("now", "今すぐ更新", theme.accent, &theme)
                             .when(pending, |b| b.child(spinner(theme.accent)))
@@ -888,7 +1138,9 @@ impl Render for RoundDialog {
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 if !busy {
                                     let button = this.button.clone();
-                                    this.link.update(cx, |l, cx| l.update_library(&button, cx)).detach();
+                                    this.link
+                                        .update(cx, |l, cx| l.update_library(&button, cx))
+                                        .detach();
                                 }
                             })),
                     ),

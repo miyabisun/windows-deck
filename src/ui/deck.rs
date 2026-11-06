@@ -4,9 +4,9 @@ use std::{collections::HashMap, rc::Rc};
 
 use gpui::{
     Anchor, AnyView, App, AppContext as _, Context, DismissEvent, Entity, FocusHandle, Focusable,
-    FontWeight, IntoElement, MouseButton, ParentElement, Pixels, Point, Render, RetainAllImageCache,
-    Role, ScrollHandle, SharedString, Styled, Subscription, Window, anchored, deferred, div, hsla,
-    point, prelude::*, px,
+    FontWeight, IntoElement, MouseButton, ParentElement, Pixels, Point, Render,
+    RetainAllImageCache, Role, ScrollHandle, SharedString, Styled, Subscription, Window, anchored,
+    deferred, div, hsla, point, prelude::*, px,
 };
 
 use super::{
@@ -14,9 +14,12 @@ use super::{
     icons::{glyph, spinner},
     library::LibraryModal,
     mixer::MixerModal,
-    theme::{FONT, FS_LABEL, FS_MD, FS_SM, FS_STATE, RADIUS_LG, RADIUS_MD, RADIUS_SM, ROW_HEIGHT, SP_1, SP_2, SP_3, SP_4, SP_5, TILE_HEIGHT, TILE_WIDTH, Theme, shadow},
+    theme::{
+        FONT, FS_LABEL, FS_MD, FS_SM, FS_STATE, RADIUS_LG, RADIUS_MD, RADIUS_SM, ROW_HEIGHT, SP_1,
+        SP_2, SP_3, SP_4, SP_5, TILE_HEIGHT, TILE_WIDTH, Theme, shadow,
+    },
     tile::{Face, Tile, columns},
-    widgets::{Menu, MenuItem, Notice, OnLong, outlined_button},
+    widgets::{Act, Menu, MenuItem, Notice, OnLong, outlined_button},
 };
 use crate::{
     link::{Link, LinkStatus, PinAgain, RestStep, Started, item_key},
@@ -35,6 +38,19 @@ pub struct Setup {
     pub candidates: Vec<Monitor>,
 }
 
+/// What the panel's window starts with.
+pub struct Opened {
+    /// The configured monitor, kept lit while resting.
+    pub monitor: Option<String>,
+    /// Why the configuration could not be read.
+    pub config_error: Option<String>,
+    pub setup: Option<Setup>,
+    /// The window's handle, for windows-link to pin.
+    pub hwnd: Option<isize>,
+    /// Read the configuration again and place the window anew.
+    pub reload: Act,
+}
+
 pub struct Deck {
     link: Entity<Link>,
     /// The configured monitor, kept lit while resting.
@@ -44,7 +60,7 @@ pub struct Deck {
     /// This window's handle, which windows-link pins to every virtual desktop.
     hwnd: Option<isize>,
     /// Read the configuration again and place the window anew.
-    reload: Rc<dyn Fn(&mut Window, &mut App)>,
+    reload: Act,
     focus: FocusHandle,
     wake_focus: FocusHandle,
     scroll: ScrollHandle,
@@ -70,7 +86,14 @@ impl Focusable for Deck {
 }
 
 impl Host for Deck {
-    fn open_dialog(&mut self, view: AnyView, focus: FocusHandle, subscription: Subscription, _window: &mut Window, cx: &mut Context<Self>) {
+    fn open_dialog(
+        &mut self,
+        view: AnyView,
+        focus: FocusHandle,
+        subscription: Subscription,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.menu = None;
         self.dialog = Some((view, focus, subscription));
         cx.notify();
@@ -83,21 +106,25 @@ impl Host for Deck {
     }
 
     fn tell(&mut self, text: String, cx: &mut Context<Self>) {
-        self.notice.show(text, cx, |this: &mut Self| &mut this.notice);
+        self.notice
+            .show(text, cx, |this: &mut Self| &mut this.notice);
     }
 }
 
 impl Deck {
     pub fn new(
         link: Entity<Link>,
-        monitor: Option<String>,
-        config_error: Option<String>,
-        setup: Option<Setup>,
-        hwnd: Option<isize>,
-        reload: Rc<dyn Fn(&mut Window, &mut App)>,
+        opened: Opened,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
+        let Opened {
+            monitor,
+            config_error,
+            setup,
+            hwnd,
+            reload,
+        } = opened;
         let observed = cx.observe_in(&link, window, |this: &mut Self, link, window, cx| {
             let resting = link.read(cx).resting;
             if resting && !this.was_resting {
@@ -173,7 +200,13 @@ impl Deck {
         self.link.update(cx, |l, cx| l.sync_rest(cx)).detach();
     }
 
-    fn open_library(&mut self, button: &str, label: &str, window: &mut Window, cx: &mut Context<Self>) {
+    fn open_library(
+        &mut self,
+        button: &str,
+        label: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         // Opening the library is the next press, which clears a failed update.
         self.link.update(cx, |l, _| {
             l.failures.remove(button);
@@ -206,11 +239,18 @@ impl Deck {
     }
 
     /// A shop's update shows how its round goes; Steam's says what it started.
-    fn update_library(&mut self, button: String, label: String, rounds: bool, window: &mut Window, cx: &mut Context<Self>) {
+    fn update_library(
+        &mut self,
+        button: &str,
+        label: &str,
+        rounds: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if rounds {
-            self.follow_round(button.clone(), label, window, cx);
+            self.follow_round(button.to_owned(), label.to_owned(), window, cx);
         }
-        let started = self.link.update(cx, |l, cx| l.update_library(&button, cx));
+        let started = self.link.update(cx, |l, cx| l.update_library(button, cx));
         cx.spawn(async move |this, cx| {
             // A failure stays on the button (Link keeps it), and shows in the round's dialog.
             if let Some(started) = started.await
@@ -222,19 +262,34 @@ impl Deck {
         .detach();
     }
 
-    fn follow_round(&mut self, button: String, label: String, window: &mut Window, cx: &mut Context<Self>) {
+    fn follow_round(
+        &mut self,
+        button: String,
+        label: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let link = self.link.clone();
         let round = cx.new(|cx| RoundDialog::new(link, button, label, cx));
         open(self, round, window, cx);
     }
 
-    fn start_pin(&mut self, button: String, id: String, name: String, window: &mut Window, cx: &mut Context<Self>) {
+    fn start_pin(
+        &mut self,
+        button: String,
+        id: String,
+        name: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let started = self.link.update(cx, |l, cx| l.start_item(&button, &id, cx));
         cx.spawn_in(window, async move |this, cx| {
             if started.await == Started::Choose {
                 let _ = this.update_in(cx, |this, window, cx| {
                     let link = this.link.clone();
-                    let chooser = cx.new(|cx| ProgramChooser::new(link, button, id, name, Some(Rc::new(|_, _| {})), cx));
+                    let chooser = cx.new(|cx| {
+                        ProgramChooser::new(link, button, id, name, Some(Rc::new(|_, _| {})), cx)
+                    });
                     open(this, chooser, window, cx);
                 });
             }
@@ -243,26 +298,49 @@ impl Deck {
     }
 
     fn overlay_open(&self) -> bool {
-        self.library.is_some() || self.mixer.is_some() || self.menu.is_some() || self.dialog.is_some() || self.desktop_menu
+        self.library.is_some()
+            || self.mixer.is_some()
+            || self.menu.is_some()
+            || self.dialog.is_some()
+            || self.desktop_menu
     }
 
     #[allow(clippy::too_many_lines)] // The tab bar, top to bottom.
-    fn tabs(&mut self, theme: &Theme, inert: bool, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+    fn tabs(
+        &mut self,
+        theme: &Theme,
+        inert: bool,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement + use<> {
         let link = self.link.read(cx);
         let mut desktops: Vec<Desktop> = link.desktops.clone();
         desktops.sort_by_key(|d| d.index);
         let disabled = !link.connected();
         let switching = link.switching.clone();
-        let failure = link.desktop_failure.clone().or_else(|| (!link.resting).then(|| link.rest_failure.clone()).flatten());
+        let failure = link
+            .desktop_failure
+            .clone()
+            .or_else(|| (!link.resting).then(|| link.rest_failure.clone()).flatten());
         // Only the current tab is in the Tab order; the arrow keys move between tabs and Enter
         // or Space switches.
-        let focusable = if desktops.iter().any(|d| d.current) { None } else { desktops.first().map(|d| d.id.clone()) };
+        let focusable = if desktops.iter().any(|d| d.current) {
+            None
+        } else {
+            desktops.first().map(|d| d.id.clone())
+        };
         for desktop in &desktops {
-            self.tab_focus.entry(desktop.id.clone()).or_insert_with(|| cx.focus_handle());
+            self.tab_focus
+                .entry(desktop.id.clone())
+                .or_insert_with(|| cx.focus_handle());
         }
-        let order: Vec<FocusHandle> = desktops.iter().map(|d| self.tab_focus[&d.id].clone()).collect();
+        let order: Vec<FocusHandle> = desktops
+            .iter()
+            .map(|d| self.tab_focus[&d.id].clone())
+            .collect();
         let tabs = desktops.iter().enumerate().map(|(index, desktop)| {
-            let handle = self.tab_focus[&desktop.id].clone().tab_stop(!inert && (desktop.current || Some(&desktop.id) == focusable.as_ref()));
+            let handle = self.tab_focus[&desktop.id]
+                .clone()
+                .tab_stop(!inert && (desktop.current || Some(&desktop.id) == focusable.as_ref()));
             let id = desktop.id.clone();
             let current = desktop.current;
             let order = order.clone();
@@ -292,17 +370,27 @@ impl Deck {
                 })
                 .when(!current, |tab| tab.text_color(theme.muted))
                 .when(disabled, |tab| tab.opacity(0.5))
-                .when(!current && !disabled && !inert, |tab| tab.cursor_pointer().hover(move |s| s.bg(hover)))
+                .when(!current && !disabled && !inert, |tab| {
+                    tab.cursor_pointer().hover(move |s| s.bg(hover))
+                })
                 .child(desktop.name.clone())
                 .when(current, |tab| {
                     let name = desktop.name.clone();
-                    tab.child(div().absolute().debug_selector(move || format!("selected-{name}")))
+                    tab.child(
+                        div()
+                            .absolute()
+                            .debug_selector(move || format!("selected-{name}")),
+                    )
                 })
-                .when(switching.as_deref() == Some(desktop.id.as_str()), |tab| tab.child(spinner(theme.accent)))
+                .when(switching.as_deref() == Some(desktop.id.as_str()), |tab| {
+                    tab.child(spinner(theme.accent))
+                })
                 .when(!inert, |tab| {
                     tab.on_click(cx.listener(move |this, _, _, cx| {
                         if !disabled && !current {
-                            this.link.update(cx, |l, cx| l.switch_desktop(&id, cx)).detach();
+                            this.link
+                                .update(cx, |l, cx| l.switch_desktop(&id, cx))
+                                .detach();
                         }
                     }))
                     .on_key_down(move |event, window, cx| {
@@ -335,7 +423,9 @@ impl Deck {
                 .justify_center()
                 .size(TILE_HEIGHT / 2.)
                 .when(disabled, |a| a.opacity(0.5))
-                .when(!disabled && !inert, |a| a.cursor_pointer().hover(move |s| s.bg(hover)))
+                .when(!disabled && !inert, |a| {
+                    a.cursor_pointer().hover(move |s| s.bg(hover))
+                })
                 .child(glyph(icon, px(24.), theme.on_surface))
         };
         let add = action("add-desktop", "デスクトップを作る", Glyph::Plus)
@@ -356,7 +446,9 @@ impl Deck {
             a.on_click(cx.listener(move |this, _, _, cx| {
                 if !disabled {
                     let monitor = this.monitor.clone();
-                    this.link.update(cx, |l, cx| l.rest(monitor.as_deref(), cx)).detach();
+                    this.link
+                        .update(cx, |l, cx| l.rest(monitor.as_deref(), cx))
+                        .detach();
                 }
             }))
         });
@@ -400,7 +492,12 @@ impl Deck {
             .child(div().flex().flex_none().gap(SP_1).child(add).child(rest))
     }
 
-    fn desktop_menu(&self, theme: &Theme, top: Pixels, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+    fn desktop_menu(
+        &self,
+        theme: &Theme,
+        top: Pixels,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement + use<> {
         let unmatched = self.link.read(cx).unmatched.clone();
         let close = cx.listener(|this, _, window, cx| {
             this.desktop_menu = false;
@@ -438,7 +535,9 @@ impl Deck {
                         .child(name)
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.desktop_menu = false;
-                            this.link.update(cx, |l, cx| l.create_desktop(&created, cx)).detach();
+                            this.link
+                                .update(cx, |l, cx| l.create_desktop(&created, cx))
+                                .detach();
                             cx.notify();
                         }))
                         .into_any_element()
@@ -492,67 +591,113 @@ impl Deck {
     }
 
     #[allow(clippy::too_many_lines)] // Every button, then every pinned game.
-    fn grid(&mut self, theme: &Theme, inert: bool, width: Pixels, window: &Window, cx: &mut Context<Self>) -> Vec<gpui::AnyElement> {
+    fn grid(
+        &mut self,
+        theme: &Theme,
+        inert: bool,
+        width: Pixels,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> Vec<gpui::AnyElement> {
         let _ = window;
         let link = self.link.read(cx);
         let base = link.base().to_owned();
         let disabled = !link.connected();
-        let visible: Vec<_> = buttons_for(&link.buttons, &link.desktops).into_iter().cloned().collect();
+        let visible: Vec<_> = buttons_for(&link.buttons, &link.desktops)
+            .into_iter()
+            .cloned()
+            .collect();
         let pins = pins_of(&visible);
         let entity = cx.entity().downgrade();
         let mut tiles = Vec::new();
         for button in visible {
             let id = button.id.clone();
-            let on_press: Rc<dyn Fn(&mut Window, &mut App)> = {
+            let on_press: Act = {
                 let (entity, button) = (entity.clone(), button.clone());
                 Rc::new(move |window, cx| {
                     let _ = entity.update(cx, |this, cx| match &button.state {
-                        State::Library(_) => this.open_library(&button.id, &button.label, window, cx),
+                        State::Library(_) => {
+                            this.open_library(&button.id, &button.label, window, cx);
+                        }
                         State::Mixer { .. } => this.open_mixer(window, cx),
-                        _ => this.link.update(cx, |l, cx| l.press(&button.id, cx)).detach(),
+                        _ => this
+                            .link
+                            .update(cx, |l, cx| l.press(&button.id, cx))
+                            .detach(),
                     });
                 })
             };
             let on_long: Option<OnLong> = match &button.state {
                 State::Library(library) => {
-                    let (entity, id, label, rounds) = (entity.clone(), button.id.clone(), button.label.clone(), library.rounds);
-                    Some(Rc::new(move |at: Point<Pixels>, window: &mut Window, cx: &mut App| {
-                        let (id, label) = (id.clone(), label.clone());
-                        let _ = entity.update(cx, |this, cx| {
-                            let target = cx.entity().downgrade();
-                            let mut items = vec![{
-                                let (target, id, label) = (target.clone(), id.clone(), label.clone());
-                                MenuItem::new("ライブラリを更新", move |window, cx| {
-                                    let _ = target.update(cx, |this, cx| this.update_library(id.clone(), label.clone(), rounds, window, cx));
-                                })
-                            }];
-                            if rounds {
-                                let (id, label) = (id.clone(), label.clone());
-                                items.push(MenuItem::new("更新の状況", move |window, cx| {
-                                    let _ = target.update(cx, |this, cx| this.follow_round(id.clone(), label.clone(), window, cx));
-                                }));
-                            }
-                            this.show_menu(Menu::new(at, label, items, cx), window, cx);
-                        });
-                    }))
+                    let (entity, id, label, rounds) = (
+                        entity.clone(),
+                        button.id.clone(),
+                        button.label.clone(),
+                        library.rounds,
+                    );
+                    Some(Rc::new(
+                        move |at: Point<Pixels>, window: &mut Window, cx: &mut App| {
+                            let (id, label) = (id.clone(), label.clone());
+                            let _ = entity.update(cx, |this, cx| {
+                                let target = cx.entity().downgrade();
+                                let mut items = vec![{
+                                    let (target, id, label) =
+                                        (target.clone(), id.clone(), label.clone());
+                                    MenuItem::new("ライブラリを更新", move |window, cx| {
+                                        let _ = target.update(cx, |this, cx| {
+                                            this.update_library(&id, &label, rounds, window, cx);
+                                        });
+                                    })
+                                }];
+                                if rounds {
+                                    let (id, label) = (id.clone(), label.clone());
+                                    items.push(MenuItem::new(
+                                        "更新の状況",
+                                        move |window, cx| {
+                                            let _ = target.update(cx, |this, cx| {
+                                                this.follow_round(
+                                                    id.clone(),
+                                                    label.clone(),
+                                                    window,
+                                                    cx,
+                                                );
+                                            });
+                                        },
+                                    ));
+                                }
+                                this.show_menu(Menu::new(at, label, items, cx), window, cx);
+                            });
+                        },
+                    ))
                 }
                 State::Highlight { .. } => {
-                    let (entity, id, label, state) = (entity.clone(), button.id.clone(), button.label.clone(), button.state.clone());
-                    Some(Rc::new(move |at: Point<Pixels>, window: &mut Window, cx: &mut App| {
-                        let items = color_menu(&state)
-                            .into_iter()
-                            .map(|choice| {
-                                let (entity, id) = (entity.clone(), id.clone());
-                                MenuItem::new(choice.label, move |_, cx| {
-                                    let _ = entity.update(cx, |this, cx| {
-                                        this.link.update(cx, |l, cx| l.set_color(&id, choice.color, cx)).detach();
-                                    });
+                    let (entity, id, label, state) = (
+                        entity.clone(),
+                        button.id.clone(),
+                        button.label.clone(),
+                        button.state.clone(),
+                    );
+                    Some(Rc::new(
+                        move |at: Point<Pixels>, window: &mut Window, cx: &mut App| {
+                            let items = color_menu(&state)
+                                .into_iter()
+                                .map(|choice| {
+                                    let (entity, id) = (entity.clone(), id.clone());
+                                    MenuItem::new(choice.label, move |_, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.link
+                                                .update(cx, |l, cx| {
+                                                    l.set_color(&id, choice.color, cx)
+                                                })
+                                                .detach();
+                                        });
+                                    })
                                 })
-                            })
-                            .collect();
-                        let menu = Menu::new(at, label.clone(), items, cx);
-                        let _ = entity.update(cx, |this, cx| this.show_menu(menu, window, cx));
-                    }))
+                                .collect();
+                            let menu = Menu::new(at, label.clone(), items, cx);
+                            let _ = entity.update(cx, |this, cx| this.show_menu(menu, window, cx));
+                        },
+                    ))
                 }
                 _ => None,
             };
@@ -562,8 +707,14 @@ impl Deck {
                     label: button.label.clone().into(),
                     face: Face::Button {
                         shown: describe_state(&button.state),
-                        picture: button.icon.then(|| SharedString::from(format!("{base}/buttons/{}/icon", encode(&id)))),
-                        glyph: if button.icon { None } else { state_icon(&button.state) },
+                        picture: button.icon.then(|| {
+                            SharedString::from(format!("{base}/buttons/{}/icon", encode(&id)))
+                        }),
+                        glyph: if button.icon {
+                            None
+                        } else {
+                            state_icon(&button.state)
+                        },
                     },
                     pending: link.pending.contains(&id),
                     failure: link.failures.get(&id).cloned(),
@@ -581,17 +732,40 @@ impl Deck {
         }
         for pinned in pins {
             let key = item_key(&pinned.button, &pinned.pin.id);
-            let on_press: Rc<dyn Fn(&mut Window, &mut App)> = {
+            let on_press: Act = {
                 let (entity, pinned) = (entity.clone(), pinned.clone());
                 Rc::new(move |window, cx| {
-                    let _ = entity.update(cx, |this, cx| this.start_pin(pinned.button.clone(), pinned.pin.id.clone(), pinned.pin.name.clone(), window, cx));
+                    let _ = entity.update(cx, |this, cx| {
+                        this.start_pin(
+                            pinned.button.clone(),
+                            pinned.pin.id.clone(),
+                            pinned.pin.name.clone(),
+                            window,
+                            cx,
+                        );
+                    });
                 })
             };
             let on_long: OnLong = {
-                let (entity, pinned, link_entity) = (entity.clone(), pinned.clone(), self.link.clone());
+                let (entity, pinned, link_entity) =
+                    (entity.clone(), pinned.clone(), self.link.clone());
                 Rc::new(move |at, window, cx| {
-                    let game = MenuGame { id: pinned.pin.id.clone(), name: pinned.pin.name.clone(), installed: None, choosable: false, page: None };
-                    let menu = game_menu(entity.clone(), &link_entity, &pinned.button, game, true, at, cx);
+                    let game = MenuGame {
+                        id: pinned.pin.id.clone(),
+                        name: pinned.pin.name.clone(),
+                        installed: None,
+                        choosable: false,
+                        page: None,
+                    };
+                    let menu = game_menu(
+                        entity.clone(),
+                        &link_entity,
+                        &pinned.button,
+                        game,
+                        true,
+                        at,
+                        cx,
+                    );
                     let _ = entity.update(cx, |this, cx| this.show_menu(menu, window, cx));
                 })
             };
@@ -599,7 +773,11 @@ impl Deck {
                 Tile {
                     key: key.clone().into(),
                     label: pinned.pin.name.clone().into(),
-                    face: Face::Game { cover: Some(picture_url(&base, &pinned.button, &pinned.pin.id).into()), whole: pinned.whole, note: None },
+                    face: Face::Game {
+                        cover: Some(picture_url(&base, &pinned.button, &pinned.pin.id).into()),
+                        whole: pinned.whole,
+                        note: None,
+                    },
                     pending: link.pending.contains(&key),
                     failure: link.failures.get(&key).cloned(),
                     disabled,
@@ -674,11 +852,15 @@ impl Deck {
                     .font_weight(FontWeight::SEMIBOLD)
                     .cursor_pointer()
                     .when(pending, |w| w.child(spinner(white(0.8))))
-                    .when(!pending, |w| w.child(glyph(Glyph::Sun, px(29.), white(0.8))))
+                    .when(!pending, |w| {
+                        w.child(glyph(Glyph::Sun, px(29.), white(0.8)))
+                    })
                     .child("復帰")
                     .on_click(cx.listener(move |this, _, _, cx| {
                         if !pending {
-                            this.link.update(cx, |l, cx| l.wake(cx)).detach();
+                            this.link
+                                .update(cx, super::super::link::Link::wake)
+                                .detach();
                         }
                     })),
             )
@@ -706,7 +888,11 @@ impl Render for Deck {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let resting = self.link.read(cx).resting;
         let base_theme = Theme::get(cx);
-        let theme = if resting { base_theme.grayscale() } else { base_theme };
+        let theme = if resting {
+            base_theme.grayscale()
+        } else {
+            base_theme
+        };
         let inert = resting || self.overlay_open();
         let viewport = window.viewport_size();
         let (count, width) = columns(viewport.width - SP_4 * 2., TILE_WIDTH, SP_3);
@@ -727,7 +913,13 @@ impl Render for Deck {
             .overflow_y_scroll()
             .track_scroll(&self.scroll);
         if let Some(error) = self.config_error.clone() {
-            page = page.child(Self::banner(format!("設定ファイルを読めないため、既定の設定で動いています: {error}"), &theme).role(Role::Alert));
+            page = page.child(
+                Self::banner(
+                    format!("設定ファイルを読めないため、既定の設定で動いています: {error}"),
+                    &theme,
+                )
+                .role(Role::Alert),
+            );
         }
         if let Some(setup) = self.setup.clone() {
             let reload = self.reload.clone();
@@ -764,9 +956,19 @@ impl Render for Deck {
             );
         }
         if status == LinkStatus::Disconnected {
-            page = page.child(Self::banner(format!("windows-link（{base}）に接続できません。再接続しています…"), &theme).role(Role::Status));
+            page = page.child(
+                Self::banner(
+                    format!("windows-link（{base}）に接続できません。再接続しています…"),
+                    &theme,
+                )
+                .role(Role::Status),
+            );
         }
-        let quiet = |text: &str| super::widgets::text(text.to_owned()).text_size(FS_MD).text_color(theme.muted);
+        let quiet = |text: &str| {
+            super::widgets::text(text.to_owned())
+                .text_size(FS_MD)
+                .text_color(theme.muted)
+        };
         page = if status == LinkStatus::Connecting && !has_buttons {
             page.child(
                 div()
@@ -792,19 +994,28 @@ impl Render for Deck {
             page.child(quiet("このデスクトップに割り当てたボタンはありません。"))
         } else {
             let tiles = self.grid(&theme, inert, width, window, cx);
-            page.child(div().grid().grid_cols(u16::try_from(count).unwrap_or(1)).gap(SP_3).children(tiles))
+            page.child(
+                div()
+                    .grid()
+                    .grid_cols(u16::try_from(count).unwrap_or(1))
+                    .gap(SP_3)
+                    .children(tiles),
+            )
         };
         let bar_bottom = TILE_HEIGHT / 2. + px(1.);
-        let desktop_menu = self.desktop_menu.then(|| self.desktop_menu(&theme, bar_bottom, cx));
+        let desktop_menu = self
+            .desktop_menu
+            .then(|| self.desktop_menu(&theme, bar_bottom, cx));
         let menu = self.menu.as_ref().map(|menu| {
             let this = cx.entity().downgrade();
-            menu.render(&theme, Rc::new(move |window, cx| {
+            let close: Act = Rc::new(move |window, cx| {
                 let _ = this.update(cx, |this, cx| {
                     this.menu = None;
                     window.focus(&this.focus, cx);
                     cx.notify();
                 });
-            }))
+            });
+            menu.render(&theme, &close)
         });
         div()
             .image_cache(self.images.clone())

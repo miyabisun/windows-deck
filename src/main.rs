@@ -2,7 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use windows_deck::{
-    app, attach_console, login, logging, pid_to_wait_for,
+    app, attach_console, logging, login, pid_to_wait_for,
     platform::{self, Instance},
     wait_for_exit,
 };
@@ -20,7 +20,8 @@ fn main() {
         logging::init();
         let value = |at: Option<usize>| at.and_then(|at| args.get(at + 1)).map(String::as_str);
         let shop = value(Some(at)).unwrap_or_default();
-        let link = value(args.iter().position(|arg| arg == login::LINK)).unwrap_or(windows_deck::config::DEFAULT_LINK);
+        let link = value(args.iter().position(|arg| arg == login::LINK))
+            .unwrap_or(windows_deck::config::DEFAULT_LINK);
         std::process::exit(login::run(shop, link));
     }
     if let Some(pid) = pid_to_wait_for(&args) {

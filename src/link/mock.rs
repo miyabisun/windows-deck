@@ -1,6 +1,9 @@
 //! A stand-in for windows-link for the panel's tests: its button API and `/events`, with
 //! switches for the tests (the counterpart of the Playwright suite's `e2e/mock-link.js`).
 
+// The stand-in takes its JSON as the tests write it.
+#![allow(clippy::needless_pass_by_value, clippy::unnecessary_wraps)]
+
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use futures::channel::mpsc::UnboundedSender;
@@ -15,7 +18,11 @@ use crate::model::protocol::ErrorBody;
 pub const BASE: &str = "http://127.0.0.1:4730";
 
 pub fn output(current: &str) -> Value {
-    let name = if current == "motu" { "MOTU (MOTU M Series)" } else { "BTイヤホン (JBL Tour Pro 3)" };
+    let name = if current == "motu" {
+        "MOTU (MOTU M Series)"
+    } else {
+        "BTイヤホン (JBL Tour Pro 3)"
+    };
     json!({ "id": "output", "type": "audio.output_toggle", "label": "出力切替", "desktop": null,
         "state": { "kind": "output", "current": current, "current_name": name, "options": [
             { "alias": "motu", "name": "MOTU (MOTU M Series)", "connected": true, "icon": "speaker" },
@@ -194,17 +201,26 @@ impl Default for MockLink {
 }
 
 fn answer(status: u16, body: Value) -> Option<Answer> {
-    Some(Answer { status, body: (!body.is_null()).then_some(body) })
+    Some(Answer {
+        status,
+        body: (!body.is_null()).then_some(body),
+    })
 }
 
 impl MockLink {
     pub fn state(&self) -> MutexGuard<'_, State> {
-        self.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+        self.0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     fn broadcast(state: &mut State, message: &Value) {
         let text = message.to_string();
-        state.sockets.retain(|socket| socket.unbounded_send(SocketMessage::Text(text.clone())).is_ok());
+        state.sockets.retain(|socket| {
+            socket
+                .unbounded_send(SocketMessage::Text(text.clone()))
+                .is_ok()
+        });
     }
 
     /// Change a button as if Windows changed it, and notify as windows-link does.
@@ -228,7 +244,10 @@ impl MockLink {
         let mut state = self.state();
         state.desktops = desktops.clone();
         let unmatched = state.unmatched.clone();
-        Self::broadcast(&mut state, &json!({ "type": "desktops", "reason": reason, "desktops": desktops, "unmatched": unmatched, "error": null }));
+        Self::broadcast(
+            &mut state,
+            &json!({ "type": "desktops", "reason": reason, "desktops": desktops, "unmatched": unmatched, "error": null }),
+        );
     }
 
     pub fn go_down(&self) {
@@ -257,15 +276,25 @@ impl MockLink {
     }
 
     fn app_changed(state: &mut State) {
-        let Some(index) = state.buttons.iter().position(|b| b["id"] == "sf6-mute") else { return };
-        let app = state.mixer["apps"].as_array().and_then(|apps| apps.iter().find(|a| a["process"] == "StreetFighter6.exe")).cloned();
+        let Some(index) = state.buttons.iter().position(|b| b["id"] == "sf6-mute") else {
+            return;
+        };
+        let app = state.mixer["apps"]
+            .as_array()
+            .and_then(|apps| apps.iter().find(|a| a["process"] == "StreetFighter6.exe"))
+            .cloned();
         let button = app_mute_button(app.as_ref());
         state.buttons[index] = button.clone();
         Self::broadcast(state, &json!({ "type": "button", "button": button }));
     }
 
     fn button(state: &State, id: &str) -> Value {
-        state.buttons.iter().find(|b| b["id"] == id).cloned().unwrap_or(Value::Null)
+        state
+            .buttons
+            .iter()
+            .find(|b| b["id"] == id)
+            .cloned()
+            .unwrap_or(Value::Null)
     }
 
     #[allow(clippy::too_many_lines)] // One windows-link, route by route.
@@ -278,16 +307,30 @@ impl MockLink {
         let parts: Vec<String> = path
             .trim_start_matches('/')
             .split('/')
-            .map(|p| percent_encoding::percent_decode_str(p).decode_utf8_lossy().into_owned())
+            .map(|p| {
+                percent_encoding::percent_decode_str(p)
+                    .decode_utf8_lossy()
+                    .into_owned()
+            })
             .collect();
         let parts: Vec<&str> = parts.iter().map(String::as_str).collect();
-        let field = |name: &str| body.and_then(|b| b.get(name)).cloned().unwrap_or(Value::Null);
+        let field = |name: &str| {
+            body.and_then(|b| b.get(name))
+                .cloned()
+                .unwrap_or(Value::Null)
+        };
         match (method, parts.as_slice()) {
             ("POST", ["desktops", id, "switch"]) => {
                 s.switches.push((*id).to_owned());
-                let known = s.desktops.as_array().is_some_and(|d| d.iter().any(|d| d["id"] == *id));
+                let known = s
+                    .desktops
+                    .as_array()
+                    .is_some_and(|d| d.iter().any(|d| d["id"] == *id));
                 if !known {
-                    return answer(404, json!({ "error": "not_found", "message": "no desktop with this id" }));
+                    return answer(
+                        404,
+                        json!({ "error": "not_found", "message": "no desktop with this id" }),
+                    );
                 }
                 if let Some(list) = s.desktops.as_array_mut() {
                     for desktop in list {
@@ -295,7 +338,10 @@ impl MockLink {
                     }
                 }
                 let desktops = s.desktops.clone();
-                Self::broadcast(s, &json!({ "type": "desktops", "reason": "changed", "desktops": desktops, "error": null }));
+                Self::broadcast(
+                    s,
+                    &json!({ "type": "desktops", "reason": "changed", "desktops": desktops, "error": null }),
+                );
                 answer(200, json!({ "desktops": s.desktops, "error": null }))
             }
             ("POST", ["desktops"]) => {
@@ -304,21 +350,40 @@ impl MockLink {
                 if list.iter().any(|d| d["name"] == name.as_str()) {
                     return answer(409, json!({ "error": "exists", "message": "exists" }));
                 }
-                let mut list: Vec<Value> = list.into_iter().map(|mut d| { d["current"] = json!(false); d }).collect();
+                let mut list: Vec<Value> = list
+                    .into_iter()
+                    .map(|mut d| {
+                        d["current"] = json!(false);
+                        d
+                    })
+                    .collect();
                 list.push(json!({ "id": format!("GUID-{}", list.len()), "name": name, "index": list.len(), "current": true }));
                 s.desktops = Value::Array(list);
                 s.unmatched.retain(|n| *n != name);
                 let (desktops, unmatched) = (s.desktops.clone(), s.unmatched.clone());
-                Self::broadcast(s, &json!({ "type": "desktops", "reason": "created", "desktops": desktops, "unmatched": unmatched, "error": null }));
-                answer(201, json!({ "desktops": s.desktops, "unmatched": s.unmatched, "error": null }))
+                Self::broadcast(
+                    s,
+                    &json!({ "type": "desktops", "reason": "created", "desktops": desktops, "unmatched": unmatched, "error": null }),
+                );
+                answer(
+                    201,
+                    json!({ "desktops": s.desktops, "unmatched": s.unmatched, "error": null }),
+                )
             }
             ("GET", ["touch-monitors"]) => answer(200, s.monitors.clone()),
             ("GET", ["power"]) => answer(200, json!({ "resting": s.resting })),
             ("POST", ["power", "rest"]) => {
                 let keep = field("keep").as_str().unwrap_or_default().to_owned();
                 s.rests.push(keep.clone());
-                if !s.monitors.as_array().is_some_and(|m| m.iter().any(|m| m["id"] == keep.as_str())) {
-                    return answer(404, json!({ "error": "not_found", "message": "no connected monitor" }));
+                if !s
+                    .monitors
+                    .as_array()
+                    .is_some_and(|m| m.iter().any(|m| m["id"] == keep.as_str()))
+                {
+                    return answer(
+                        404,
+                        json!({ "error": "not_found", "message": "no connected monitor" }),
+                    );
                 }
                 s.resting = true;
                 Self::broadcast(s, &json!({ "type": "power", "resting": true }));
@@ -326,7 +391,10 @@ impl MockLink {
             }
             ("POST", ["power", "wake"]) => {
                 s.wakes += 1;
-                let (status, body) = s.wake_answer.take().unwrap_or((200, json!({ "resting": false })));
+                let (status, body) = s
+                    .wake_answer
+                    .take()
+                    .unwrap_or((200, json!({ "resting": false })));
                 // windows-link is awake after a brightness it could not put back, too.
                 if status < 400 || body["error"] == "unrestored" {
                     s.resting = false;
@@ -342,7 +410,10 @@ impl MockLink {
             }
             ("POST", ["buttons", id, "library", "update"]) => {
                 s.updates.push((*id).to_owned());
-                let (status, body) = s.update_answer.take().unwrap_or((200, json!({ "updates": 3, "installs": 24 })));
+                let (status, body) = s
+                    .update_answer
+                    .take()
+                    .unwrap_or((200, json!({ "updates": 3, "installs": 24 })));
                 answer(status, body)
             }
             ("GET", ["buttons", "dlsite", "library"]) => {
@@ -356,11 +427,20 @@ impl MockLink {
             (_, ["buttons", "dlsite", "library", item, action]) => {
                 let item = (*item).to_owned();
                 match (method, *action) {
-                    ("GET", "keys") => answer(200, json!({ "keys": s.dlsite["keys"][item.as_str()].as_array().cloned().unwrap_or_default() })),
+                    ("GET", "keys") => answer(
+                        200,
+                        json!({ "keys": s.dlsite["keys"][item.as_str()].as_array().cloned().unwrap_or_default() }),
+                    ),
                     ("POST", "page") => {
-                        let known = s.dlsite["items"].as_array().and_then(|i| i.iter().find(|i| i["id"] == item.as_str())).is_some_and(|i| !i["page"].is_null());
+                        let known = s.dlsite["items"]
+                            .as_array()
+                            .and_then(|i| i.iter().find(|i| i["id"] == item.as_str()))
+                            .is_some_and(|i| !i["page"].is_null());
                         if !known {
-                            return answer(404, json!({ "error": "not_found", "message": "the game has no page in its shop" }));
+                            return answer(
+                                404,
+                                json!({ "error": "not_found", "message": "the game has no page in its shop" }),
+                            );
                         }
                         s.pages.push(item);
                         answer(204, Value::Null)
@@ -375,20 +455,38 @@ impl MockLink {
                     }
                     ("POST", "start") => {
                         if item == "c3" {
-                            return answer(409, json!({ "error": "no_program", "message": "it has no program to start" }));
+                            return answer(
+                                409,
+                                json!({ "error": "no_program", "message": "it has no program to start" }),
+                            );
                         }
-                        let coming = s.dlsite["items"].as_array().and_then(|i| i.iter().find(|i| i["id"] == item.as_str() && i["installed"] == false)).cloned();
+                        let coming = s.dlsite["items"]
+                            .as_array()
+                            .and_then(|i| {
+                                i.iter()
+                                    .find(|i| i["id"] == item.as_str() && i["installed"] == false)
+                            })
+                            .cloned();
                         if let Some(coming) = coming {
-                            return answer(409, json!({ "error": "not_downloaded", "message": coming["status"] }));
+                            return answer(
+                                409,
+                                json!({ "error": "not_downloaded", "message": coming["status"] }),
+                            );
                         }
                         let programs = s.dlsite["programs"].get(item.as_str()).cloned();
                         if let Some(programs) = &programs
                             && programs["chosen"].is_null()
                         {
-                            return answer(409, json!({ "error": "choose_program", "message": "choose which program starts it" }));
+                            return answer(
+                                409,
+                                json!({ "error": "choose_program", "message": "choose which program starts it" }),
+                            );
                         }
                         let started = match programs {
-                            Some(programs) => format!("{item}:{}", programs["chosen"].as_str().unwrap_or_default()),
+                            Some(programs) => format!(
+                                "{item}:{}",
+                                programs["chosen"].as_str().unwrap_or_default()
+                            ),
                             None => item,
                         };
                         s.started.push(started);
@@ -398,7 +496,10 @@ impl MockLink {
                 }
             }
             ("GET", ["buttons", "games", "library"]) => {
-                let pinned: Vec<Value> = Self::button(s, "games")["state"]["pins"].as_array().map(|p| p.iter().map(|p| p["id"].clone()).collect()).unwrap_or_default();
+                let pinned: Vec<Value> = Self::button(s, "games")["state"]["pins"]
+                    .as_array()
+                    .map(|p| p.iter().map(|p| p["id"].clone()).collect())
+                    .unwrap_or_default();
                 let mut library = s.library.clone();
                 if let Some(items) = library["items"].as_array_mut() {
                     for item in items {
@@ -422,10 +523,20 @@ impl MockLink {
                 answer(200, json!({ "button": button }))
             }
             ("PUT" | "DELETE", ["buttons", "games", "pins", item]) => {
-                let Some(game) = s.library["items"].as_array().and_then(|i| i.iter().find(|i| i["id"] == *item)).cloned() else {
-                    return answer(404, json!({ "error": "not_found", "message": "no such game" }));
+                let Some(game) = s.library["items"]
+                    .as_array()
+                    .and_then(|i| i.iter().find(|i| i["id"] == *item))
+                    .cloned()
+                else {
+                    return answer(
+                        404,
+                        json!({ "error": "not_found", "message": "no such game" }),
+                    );
                 };
-                let mut pins: Vec<Value> = Self::button(s, "games")["state"]["pins"].as_array().cloned().unwrap_or_default();
+                let mut pins: Vec<Value> = Self::button(s, "games")["state"]["pins"]
+                    .as_array()
+                    .cloned()
+                    .unwrap_or_default();
                 pins.retain(|p| p["id"] != game["id"]);
                 if method == "PUT" {
                     pins.push(json!({ "id": game["id"], "name": game["name"] }));
@@ -438,9 +549,15 @@ impl MockLink {
                 answer(200, json!({ "button": button }))
             }
             ("POST", ["buttons", "games", "library", item, "folder"]) => {
-                let installed = s.library["items"].as_array().and_then(|i| i.iter().find(|i| i["id"] == *item)).is_some_and(|i| i["installed"] == true);
+                let installed = s.library["items"]
+                    .as_array()
+                    .and_then(|i| i.iter().find(|i| i["id"] == *item))
+                    .is_some_and(|i| i["installed"] == true);
                 if !installed {
-                    return answer(404, json!({ "error": "not_found", "message": "not installed" }));
+                    return answer(
+                        404,
+                        json!({ "error": "not_found", "message": "not installed" }),
+                    );
                 }
                 s.folders.push((*item).to_owned());
                 answer(204, Value::Null)
@@ -454,7 +571,10 @@ impl MockLink {
                 answer(201, json!({ "label": label }))
             }
             ("PATCH", ["buttons", "games", "labels", id]) => {
-                if let Some(label) = s.library["labels"].as_array_mut().and_then(|l| l.iter_mut().find(|l| l["id"] == *id)) {
+                if let Some(label) = s.library["labels"]
+                    .as_array_mut()
+                    .and_then(|l| l.iter_mut().find(|l| l["id"] == *id))
+                {
                     label["name"] = field("name");
                 }
                 answer(204, Value::Null)
@@ -473,7 +593,9 @@ impl MockLink {
                 answer(204, Value::Null)
             }
             ("PUT" | "DELETE", ["buttons", "games", "labels", id, "items", item]) => {
-                if let Some(game) = s.library["items"].as_array_mut().and_then(|i| i.iter_mut().find(|i| i["id"] == *item))
+                if let Some(game) = s.library["items"]
+                    .as_array_mut()
+                    .and_then(|i| i.iter_mut().find(|i| i["id"] == *item))
                     && let Some(labels) = game["labels"].as_array_mut()
                 {
                     labels.retain(|l| l != *id);
@@ -489,8 +611,14 @@ impl MockLink {
             }
             ("POST", ["buttons", "sf6-mute", "press"]) => {
                 s.presses.push("sf6-mute".into());
-                let Some(app) = s.mixer["apps"].as_array_mut().and_then(|a| a.iter_mut().find(|a| a["process"] == "StreetFighter6.exe")) else {
-                    return answer(409, json!({ "error": "not_running", "message": "no audio session" }));
+                let Some(app) = s.mixer["apps"]
+                    .as_array_mut()
+                    .and_then(|a| a.iter_mut().find(|a| a["process"] == "StreetFighter6.exe"))
+                else {
+                    return answer(
+                        409,
+                        json!({ "error": "not_running", "message": "no audio session" }),
+                    );
                 };
                 app["muted"] = json!(!app["muted"].as_bool().unwrap_or(false));
                 Self::app_changed(s);
@@ -509,7 +637,10 @@ impl MockLink {
                 answer(200, s.mixer.clone())
             }
             ("PUT", ["audio", "apps", process]) => {
-                let Some(app) = s.mixer["apps"].as_array_mut().and_then(|a| a.iter_mut().find(|a| a["process"] == *process)) else {
+                let Some(app) = s.mixer["apps"]
+                    .as_array_mut()
+                    .and_then(|a| a.iter_mut().find(|a| a["process"] == *process))
+                else {
                     return answer(404, json!({ "error": "not_found", "message": "no sound" }));
                 };
                 // A volume alone unmutes, as windows-link does.
@@ -540,9 +671,17 @@ impl MockLink {
                 };
                 let current = s.buttons[index].clone();
                 let next = if current["id"] == "output" {
-                    output(if current["state"]["current"] == "motu" { "jbl" } else { "motu" })
+                    output(if current["state"]["current"] == "motu" {
+                        "jbl"
+                    } else {
+                        "motu"
+                    })
                 } else {
-                    volume(if current["state"]["volume"].as_f64().unwrap_or(0.) > 0.6 { 0.2 } else { 1. })
+                    volume(if current["state"]["volume"].as_f64().unwrap_or(0.) > 0.6 {
+                        0.2
+                    } else {
+                        1.
+                    })
                 };
                 s.buttons[index] = next.clone();
                 Self::broadcast(s, &json!({ "type": "button", "button": next }));
@@ -594,5 +733,11 @@ impl SignIn for MockLink {
 
 /// The library state of `id` among the mock's buttons, as a map for quick checks.
 pub fn ids(list: &Value) -> Vec<String> {
-    list.as_array().map(|l| l.iter().filter_map(|i| i["id"].as_str().map(str::to_owned)).collect()).unwrap_or_default()
+    list.as_array()
+        .map(|l| {
+            l.iter()
+                .filter_map(|i| i["id"].as_str().map(str::to_owned))
+                .collect()
+        })
+        .unwrap_or_default()
 }

@@ -19,11 +19,22 @@ use super::{
 };
 use crate::model::display::Glyph;
 
+/// What a button, a menu item or a cover does when pressed.
+pub type Act = Rc<dyn Fn(&mut Window, &mut App)>;
+
+/// What a name or a choice leads to.
+pub type OnText = Rc<dyn Fn(String, &mut Window, &mut App)>;
+
+/// What a game's start leads to, with its name.
+pub type OnStarted = Rc<dyn Fn(String, &mut App)>;
+
 /// A piece of text that the panel's tests can find (`text:<the text>`).
 pub fn text(text: impl Into<SharedString>) -> Div {
     let text = text.into();
     let selector = text.clone();
-    div().debug_selector(move || format!("text:{selector}")).child(text)
+    div()
+        .debug_selector(move || format!("text:{selector}"))
+        .child(text)
 }
 
 /// What a toast says, for a few seconds after each `show`.
@@ -88,11 +99,14 @@ pub struct MenuItem {
     pub disabled: bool,
     /// For a choice of one: whether it is the chosen one.
     pub checked: Option<bool>,
-    pub action: Rc<dyn Fn(&mut Window, &mut App)>,
+    pub action: Act,
 }
 
 impl MenuItem {
-    pub fn new(label: impl Into<SharedString>, action: impl Fn(&mut Window, &mut App) + 'static) -> Self {
+    pub fn new(
+        label: impl Into<SharedString>,
+        action: impl Fn(&mut Window, &mut App) + 'static,
+    ) -> Self {
         Self {
             label: label.into(),
             disabled: false,
@@ -101,11 +115,13 @@ impl MenuItem {
         }
     }
 
+    #[must_use]
     pub fn disabled(mut self, disabled: bool) -> Self {
         self.disabled = disabled;
         self
     }
 
+    #[must_use]
     pub fn checked(mut self, checked: bool) -> Self {
         self.checked = Some(checked);
         self
@@ -122,7 +138,12 @@ pub struct Menu {
 }
 
 impl Menu {
-    pub fn new(at: Point<Pixels>, title: impl Into<SharedString>, items: Vec<MenuItem>, cx: &App) -> Self {
+    pub fn new(
+        at: Point<Pixels>,
+        title: impl Into<SharedString>,
+        items: Vec<MenuItem>,
+        cx: &App,
+    ) -> Self {
         Self {
             at,
             title: title.into(),
@@ -133,7 +154,8 @@ impl Menu {
 
     /// The menu over everything, closing (through `close`) on a choice, outside or Esc. The
     /// choice runs after the menu closed, so that it can open what comes next.
-    pub fn render(&self, theme: &Theme, close: Rc<dyn Fn(&mut Window, &mut App)>) -> impl IntoElement + use<> {
+    #[allow(clippy::too_many_lines)] // One menu, top to bottom.
+    pub fn render(&self, theme: &Theme, close: &Act) -> impl IntoElement + use<> {
         let items = self.items.iter().enumerate().map(|(index, item)| {
             let action = item.action.clone();
             let close = close.clone();
@@ -141,7 +163,11 @@ impl Menu {
             let row = div()
                 .id(("menu-item", index))
                 .debug_selector(move || format!("menu-{label}"))
-                .role(if item.checked.is_some() { Role::RadioButton } else { Role::MenuItem })
+                .role(if item.checked.is_some() {
+                    Role::RadioButton
+                } else {
+                    Role::MenuItem
+                })
                 .aria_label(item.label.clone())
                 .flex()
                 .items_center()
@@ -153,7 +179,11 @@ impl Menu {
                     row.aria_toggled(checked.into())
                         .when(checked, |row| {
                             let label = item.label.clone();
-                            row.font_weight(FontWeight::SEMIBOLD).debug_selector(move || format!("checked-{label}"))
+                            row.font_weight(FontWeight::SEMIBOLD).child(
+                                div()
+                                    .absolute()
+                                    .debug_selector(move || format!("checked-{label}")),
+                            )
                         })
                         .child(div().w(px(24.)).flex_none().when(checked, |mark| {
                             mark.child(glyph(Glyph::Check, px(24.), theme.accent))
@@ -162,12 +192,21 @@ impl Menu {
                 .child(item.label.clone());
             if item.disabled {
                 let label = item.label.clone();
-                row.opacity(0.5).debug_selector(move || format!("disabled-{label}")).into_any_element()
+                row.opacity(0.5)
+                    .child(
+                        div()
+                            .absolute()
+                            .debug_selector(move || format!("disabled-{label}")),
+                    )
+                    .into_any_element()
             } else {
                 row.focusable()
                     .tab_stop(true)
                     .cursor_pointer()
-                    .hover({ let c = theme.hover_1; move |s| s.bg(c) })
+                    .hover({
+                        let c = theme.hover_1;
+                        move |s| s.bg(c)
+                    })
                     .on_click(move |_, window, cx| {
                         close(window, cx);
                         action(window, cx);
@@ -237,7 +276,7 @@ pub fn modal<I: Into<ElementId>, L: Into<SharedString>>(
     id: I,
     label: L,
     theme: &Theme,
-    close: Rc<dyn Fn(&mut Window, &mut App)>,
+    close: Act,
     panel: Stateful<Div>,
 ) -> impl IntoElement + use<I, L> {
     let outside = close.clone();
@@ -275,7 +314,7 @@ pub fn modal<I: Into<ElementId>, L: Into<SharedString>>(
 }
 
 /// The 56px × button that closes a dialog.
-pub fn close_button(theme: &Theme, close: Rc<dyn Fn(&mut Window, &mut App)>) -> Stateful<Div> {
+pub fn close_button(theme: &Theme, close: Act) -> Stateful<Div> {
     div()
         .id("close")
         .debug_selector(|| "close".into())
@@ -290,7 +329,10 @@ pub fn close_button(theme: &Theme, close: Rc<dyn Fn(&mut Window, &mut App)>) -> 
         .size(CONTROL_HEIGHT)
         .rounded(RADIUS_MD)
         .cursor_pointer()
-        .hover({ let c = theme.hover_1; move |s| s.bg(c) })
+        .hover({
+            let c = theme.hover_1;
+            move |s| s.bg(c)
+        })
         .child(glyph(Glyph::Close, px(28.), theme.on_surface))
         .on_click(move |_, window, cx| close(window, cx))
 }
@@ -299,7 +341,7 @@ pub fn close_button(theme: &Theme, close: Rc<dyn Fn(&mut Window, &mut App)>) -> 
 pub fn dialog_head<T: Into<SharedString>>(
     title: T,
     theme: &Theme,
-    close: Rc<dyn Fn(&mut Window, &mut App)>,
+    close: Act,
 ) -> impl IntoElement + use<T> {
     div()
         .flex()
@@ -346,7 +388,10 @@ pub fn outlined_button(
         .text_color(color)
         .text_size(FS_LABEL)
         .cursor_pointer()
-        .hover({ let c = theme.hover_1; move |s| s.bg(c) })
+        .hover({
+            let c = theme.hover_1;
+            move |s| s.bg(c)
+        })
         .child(label)
 }
 

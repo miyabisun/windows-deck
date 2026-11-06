@@ -16,14 +16,22 @@ use windows_sys::Win32::{
         CloseHandle, ERROR_ALREADY_EXISTS, ERROR_PIPE_CONNECTED, GetLastError, HANDLE, HWND,
         INVALID_HANDLE_VALUE, LPARAM, LRESULT, POINT, RECT, WPARAM,
     },
-    Graphics::Gdi::{EnumDisplayMonitors, GetMonitorInfoW, HDC, HMONITOR, MONITORINFOEXW, ScreenToClient},
+    Graphics::Gdi::{
+        EnumDisplayMonitors, GetMonitorInfoW, HDC, HMONITOR, MONITORINFOEXW, ScreenToClient,
+    },
     Storage::FileSystem::{PIPE_ACCESS_INBOUND, ReadFile},
     System::{
-        Pipes::{ConnectNamedPipe, CreateNamedPipeW, DisconnectNamedPipe, PIPE_READMODE_BYTE, PIPE_TYPE_BYTE, PIPE_WAIT},
+        Pipes::{
+            ConnectNamedPipe, CreateNamedPipeW, DisconnectNamedPipe, PIPE_READMODE_BYTE,
+            PIPE_TYPE_BYTE, PIPE_WAIT,
+        },
         Threading::CreateMutexW,
     },
     UI::{
-        Controls::{FEEDBACK_GESTURE_PRESSANDTAP, FEEDBACK_TOUCH_PRESSANDHOLD, FEEDBACK_TOUCH_RIGHTTAP, SetWindowFeedbackSetting},
+        Controls::{
+            FEEDBACK_GESTURE_PRESSANDTAP, FEEDBACK_TOUCH_PRESSANDHOLD, FEEDBACK_TOUCH_RIGHTTAP,
+            SetWindowFeedbackSetting,
+        },
         HiDpi::GetDpiForWindow,
         Input::Pointer::{GetPointerInfo, GetPointerType, POINTER_INFO},
         Shell::{DefSubclassProc, RemoveWindowSubclass, SetWindowSubclass},
@@ -43,12 +51,7 @@ pub fn reduced_motion() -> bool {
     let mut enabled: i32 = 1;
     // SAFETY: the call writes one BOOL into `enabled`.
     let read = unsafe {
-        SystemParametersInfoW(
-            SPI_GETCLIENTAREAANIMATION,
-            0,
-            (&raw mut enabled).cast(),
-            0,
-        )
+        SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, (&raw mut enabled).cast(), 0)
     };
     read != 0 && enabled == 0
 }
@@ -56,7 +59,12 @@ pub fn reduced_motion() -> bool {
 /// The monitor whose display name (`\\.\DISPLAY2`) is `name`, ignoring case, as GPUI's
 /// display id (its `HMONITOR`).
 pub fn monitor_named(name: &str) -> Option<u64> {
-    unsafe extern "system" fn collect(monitor: HMONITOR, _: HDC, _: *mut RECT, data: LPARAM) -> i32 {
+    unsafe extern "system" fn collect(
+        monitor: HMONITOR,
+        _: HDC,
+        _: *mut RECT,
+        data: LPARAM,
+    ) -> i32 {
         // SAFETY: `data` is the address of the vector below, alive for the enumeration.
         unsafe { (*(data as *mut Vec<HMONITOR>)).push(monitor) };
         1
@@ -79,7 +87,11 @@ pub fn monitor_named(name: &str) -> Option<u64> {
         if unsafe { GetMonitorInfoW(monitor, (&raw mut info).cast()) } == 0 {
             return None;
         }
-        let end = info.szDevice.iter().position(|c| *c == 0).unwrap_or(info.szDevice.len());
+        let end = info
+            .szDevice
+            .iter()
+            .position(|c| *c == 0)
+            .unwrap_or(info.szDevice.len());
         let device = String::from_utf16_lossy(&info.szDevice[..end]);
         device
             .eq_ignore_ascii_case(name.trim())
@@ -178,7 +190,15 @@ fn read_all(pipe: HANDLE) -> String {
             let mut read = 0;
             let len = u32::try_from(buf.len()).unwrap_or(u32::MAX);
             // SAFETY: `buf` has room for `len` bytes and `read` receives the count.
-            let ok = unsafe { ReadFile(self.0, buf.as_mut_ptr(), len, &raw mut read, std::ptr::null_mut()) };
+            let ok = unsafe {
+                ReadFile(
+                    self.0,
+                    buf.as_mut_ptr(),
+                    len,
+                    &raw mut read,
+                    std::ptr::null_mut(),
+                )
+            };
             // A closed client ends the message.
             Ok(if ok == 0 { 0 } else { read as usize })
         }
@@ -204,7 +224,11 @@ pub fn take_touches(hwnd: isize, sink: UnboundedSender<TouchEvent>) {
     }
     // The panel shows its own menu on a long press; no ring or right click from Windows.
     let off: i32 = 0;
-    for feedback in [FEEDBACK_TOUCH_PRESSANDHOLD, FEEDBACK_TOUCH_RIGHTTAP, FEEDBACK_GESTURE_PRESSANDTAP] {
+    for feedback in [
+        FEEDBACK_TOUCH_PRESSANDHOLD,
+        FEEDBACK_TOUCH_RIGHTTAP,
+        FEEDBACK_GESTURE_PRESSANDTAP,
+    ] {
         // SAFETY: passes one BOOL for a feedback type of this window.
         unsafe {
             SetWindowFeedbackSetting(hwnd, feedback, 0, 4, (&raw const off).cast());
@@ -244,7 +268,7 @@ unsafe extern "system" fn touch_proc(
         message,
         WM_POINTERDOWN | WM_POINTERUPDATE | WM_POINTERUP | WM_POINTERCAPTURECHANGED
     ) {
-        let pointer = (wparam & 0xffff) as u32;
+        let pointer = u32::try_from(wparam & 0xffff).unwrap_or_default();
         let mut kind = 0;
         // SAFETY: reads the type of the pointer this message is about.
         let touch = unsafe { GetPointerType(pointer, &raw mut kind) } != 0 && kind == PT_TOUCH;
@@ -298,15 +322,26 @@ mod tests {
     fn a_finger_down_moving_and_up_is_a_touch() {
         assert_eq!(touch_phase(WM_POINTERDOWN, true), Some(TouchPhase::Started));
         assert_eq!(touch_phase(WM_POINTERUPDATE, true), Some(TouchPhase::Moved));
-        assert_eq!(touch_phase(WM_POINTERUPDATE, false), None, "hovering is no touch");
+        assert_eq!(
+            touch_phase(WM_POINTERUPDATE, false),
+            None,
+            "hovering is no touch"
+        );
         assert_eq!(touch_phase(WM_POINTERUP, false), Some(TouchPhase::Ended));
-        assert_eq!(touch_phase(WM_POINTERCAPTURECHANGED, false), Some(TouchPhase::Cancelled));
+        assert_eq!(
+            touch_phase(WM_POINTERCAPTURECHANGED, false),
+            Some(TouchPhase::Cancelled)
+        );
     }
 
     #[test]
     fn device_pixels_become_logical_pixels() {
         let at = logical(300, 150, 144);
         assert_eq!((at.x, at.y), (px(200.), px(100.)));
-        assert_eq!(logical(10, 20, 0).x, px(10.), "an unknown DPI is taken as 96");
+        assert_eq!(
+            logical(10, 20, 0).x,
+            px(10.),
+            "an unknown DPI is taken as 96"
+        );
     }
 }

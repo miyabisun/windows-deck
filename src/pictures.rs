@@ -58,7 +58,11 @@ impl Default for Pictures {
 fn fetch(agent: &ureq::Agent, url: &str) -> anyhow::Result<(u16, Vec<u8>)> {
     let mut response = agent.get(url).call()?;
     let status = response.status().as_u16();
-    let bytes = response.body_mut().with_config().limit(LIMIT).read_to_vec()?;
+    let bytes = response
+        .body_mut()
+        .with_config()
+        .limit(LIMIT)
+        .read_to_vec()?;
     Ok((status, bytes))
 }
 
@@ -71,7 +75,10 @@ impl HttpClient for Pictures {
         None
     }
 
-    fn send(&self, request: Request<AsyncBody>) -> BoxFuture<'static, anyhow::Result<Response<AsyncBody>>> {
+    fn send(
+        &self,
+        request: Request<AsyncBody>,
+    ) -> BoxFuture<'static, anyhow::Result<Response<AsyncBody>>> {
         let (answer, answered) = oneshot::channel();
         let sent = self
             .jobs
@@ -81,7 +88,9 @@ impl HttpClient for Pictures {
         async move {
             sent.map_err(|_| anyhow::anyhow!("the picture threads stopped"))?;
             let (status, bytes) = answered.await??;
-            Ok(Response::builder().status(status).body(AsyncBody::from(bytes))?)
+            Ok(Response::builder()
+                .status(status)
+                .body(AsyncBody::from(bytes))?)
         }
         .boxed()
     }

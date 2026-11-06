@@ -14,7 +14,7 @@ use gpui::{
 use super::{
     icons::{glyph, spinner},
     theme::{FS_LABEL, FS_SM, MONO, ROW_HEIGHT, SP_2, SP_4, Theme},
-    widgets::{dialog_head, modal},
+    widgets::{Act, dialog_head, modal},
 };
 use crate::{
     link::{Link, VolumeChange},
@@ -95,7 +95,10 @@ impl MixerModal {
                 }) else {
                     break;
                 };
-                let change = VolumeChange { volume: Some(sending), muted: None };
+                let change = VolumeChange {
+                    volume: Some(sending),
+                    muted: None,
+                };
                 let sent = link.update(cx, |l, cx| match key.strip_prefix("app:") {
                     Some(process) => l.set_app(process, change, cx),
                     None => l.set_master(change, cx),
@@ -134,7 +137,11 @@ impl MixerModal {
     }
 
     fn set_app(&mut self, process: &str, volume: f64, cx: &mut Context<Self>) {
-        let Some(app) = self.mixer.as_mut().and_then(|m| m.apps.iter_mut().find(|a| a.process == process)) else {
+        let Some(app) = self
+            .mixer
+            .as_mut()
+            .and_then(|m| m.apps.iter_mut().find(|a| a.process == process))
+        else {
             return;
         };
         app.volume = volume;
@@ -145,7 +152,7 @@ impl MixerModal {
 
     /// Mute or unmute, as the speaker of a row in Windows' volume mixer does, and take
     /// windows-link's answer unless a slider is still moving.
-    fn toggle(&mut self, process: Option<String>, cx: &mut Context<Self>) {
+    fn toggle(&mut self, process: Option<&str>, cx: &mut Context<Self>) {
         let Some(mixer) = &mut self.mixer else { return };
         let muted = match &process {
             None => {
@@ -153,14 +160,19 @@ impl MixerModal {
                 mixer.master.muted
             }
             Some(process) => {
-                let Some(app) = mixer.apps.iter_mut().find(|a| &a.process == process) else { return };
+                let Some(app) = mixer.apps.iter_mut().find(|a| a.process == *process) else {
+                    return;
+                };
                 app.muted = !app.muted;
                 app.muted
             }
         };
         cx.notify();
-        let change = VolumeChange { volume: None, muted: Some(muted) };
-        let sent = self.link.update(cx, |l, cx| match &process {
+        let change = VolumeChange {
+            volume: None,
+            muted: Some(muted),
+        };
+        let sent = self.link.update(cx, |l, cx| match process {
             Some(process) => l.set_app(process, change, cx),
             None => l.set_master(change, cx),
         });
@@ -182,6 +194,7 @@ impl MixerModal {
         .detach();
     }
 
+    #[allow(clippy::too_many_lines, clippy::needless_pass_by_value)] // One row, left to right.
     fn row(
         &mut self,
         key: &str,
@@ -234,15 +247,23 @@ impl MixerModal {
             .child(glyph(
                 if muted { Glyph::Muted } else { Glyph::Sound },
                 px(28.),
-                if muted { theme.danger } else { theme.on_surface },
+                if muted {
+                    theme.danger
+                } else {
+                    theme.on_surface
+                },
             ))
-            .on_click(cx.listener(move |this, _, _, cx| this.toggle(toggle_process.clone(), cx)));
+            .on_click(
+                cx.listener(move |this, _, _, cx| this.toggle(toggle_process.as_deref(), cx)),
+            );
         div()
             .flex()
             .items_center()
             .gap(SP_4)
             .min_h(ROW_HEIGHT)
-            .when(whole, |row| row.pb(SP_2).border_b_1().border_color(theme.border))
+            .when(whole, |row| {
+                row.pb(SP_2).border_b_1().border_color(theme.border)
+            })
             .child(speaker)
             .child(
                 div()
@@ -300,7 +321,9 @@ impl MixerModal {
                     .text_size(FS_LABEL)
                     .child({
                         let (selector, value) = (name.clone(), percent(volume));
-                        div().debug_selector(move || format!("value-{selector}-{value}")).child(format!("{value}%"))
+                        div()
+                            .debug_selector(move || format!("value-{selector}-{value}"))
+                            .child(format!("{value}%"))
                     }),
             )
     }
@@ -310,18 +333,34 @@ impl Render for MixerModal {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = Theme::get(cx);
         let this = cx.entity().downgrade();
-        let close: Rc<dyn Fn(&mut Window, &mut App)> = Rc::new(move |_, cx| {
+        let close: Act = Rc::new(move |_, cx| {
             let _ = this.update(cx, |_, cx| cx.emit(DismissEvent));
         });
         let body = match self.mixer.clone() {
             Some(mixer) => {
-                let whole = self.row("master", "全体".into(), (mixer.master.volume, mixer.master.muted), true, &theme, cx).into_any_element();
+                let whole = self
+                    .row(
+                        "master",
+                        "全体".into(),
+                        (mixer.master.volume, mixer.master.muted),
+                        true,
+                        &theme,
+                        cx,
+                    )
+                    .into_any_element();
                 let apps: Vec<_> = mixer
                     .apps
                     .iter()
                     .map(|app| {
-                        self.row(&format!("app:{}", app.process), app.name.clone().into(), (app.volume, app.muted), false, &theme, cx)
-                            .into_any_element()
+                        self.row(
+                            &format!("app:{}", app.process),
+                            app.name.clone().into(),
+                            (app.volume, app.muted),
+                            false,
+                            &theme,
+                            cx,
+                        )
+                        .into_any_element()
                     })
                     .collect();
                 div()
@@ -336,7 +375,11 @@ impl Render for MixerModal {
                             .flex_col()
                             .overflow_y_scroll()
                             .when(apps.is_empty(), |list| {
-                                list.child(super::widgets::text("音を出しているアプリはありません").text_size(FS_SM).text_color(theme.muted))
+                                list.child(
+                                    super::widgets::text("音を出しているアプリはありません")
+                                        .text_size(FS_SM)
+                                        .text_color(theme.muted),
+                                )
                             })
                             .children(apps),
                     )
@@ -366,7 +409,11 @@ impl Render for MixerModal {
             .bg(theme.surface_raised)
             .child(dialog_head("ミキサー", &theme, close.clone()))
             .when_some(self.failure.clone(), |p, f| {
-                p.child(super::widgets::text(f).text_size(FS_SM).text_color(theme.danger))
+                p.child(
+                    super::widgets::text(f)
+                        .text_size(FS_SM)
+                        .text_color(theme.danger),
+                )
             })
             .child(body);
         modal("mixer-layer", "ミキサー", &theme, close, panel)
@@ -382,8 +429,11 @@ struct Slider {
     rest: Hsla,
     ring: Hsla,
     held: Rc<Cell<bool>>,
-    on_change: Rc<dyn Fn(f64, &mut Window, &mut App)>,
+    on_change: OnValue,
 }
+
+/// What a slider's new value leads to.
+type OnValue = Rc<dyn Fn(f64, &mut Window, &mut App)>;
 
 const KNOB: Pixels = px(36.);
 
@@ -454,19 +504,49 @@ impl Element for Slider {
         #[allow(clippy::cast_possible_truncation)] // 0-1.
         let value = self.value.clamp(0., 1.) as f32;
         let knob_x = bounds.origin.x + KNOB / 2. + (bounds.size.width - KNOB) * value;
-        let track = Bounds::new(point(bounds.origin.x, middle - groove / 2.), size(bounds.size.width, groove));
-        window.paint_quad(quad(track, px(6.), self.rest, px(0.), self.rest, BorderStyle::Solid));
+        let track = Bounds::new(
+            point(bounds.origin.x, middle - groove / 2.),
+            size(bounds.size.width, groove),
+        );
+        window.paint_quad(quad(
+            track,
+            px(6.),
+            self.rest,
+            px(0.),
+            self.rest,
+            BorderStyle::Solid,
+        ));
         let filled = Bounds::new(track.origin, size(knob_x - bounds.origin.x, groove));
-        window.paint_quad(quad(filled, px(6.), self.fill, px(0.), self.fill, BorderStyle::Solid));
-        let knob = Bounds::new(point(knob_x - KNOB / 2., middle - KNOB / 2.), size(KNOB, KNOB));
-        window.paint_quad(quad(knob, KNOB / 2., self.fill, px(3.), self.ring, BorderStyle::Solid));
+        window.paint_quad(quad(
+            filled,
+            px(6.),
+            self.fill,
+            px(0.),
+            self.fill,
+            BorderStyle::Solid,
+        ));
+        let knob = Bounds::new(
+            point(knob_x - KNOB / 2., middle - KNOB / 2.),
+            size(KNOB, KNOB),
+        );
+        window.paint_quad(quad(
+            knob,
+            KNOB / 2.,
+            self.fill,
+            px(3.),
+            self.ring,
+            BorderStyle::Solid,
+        ));
 
         let (left, width) = (bounds.origin.x, bounds.size.width);
         let held = self.held.clone();
         let change = self.on_change.clone();
         let down_hitbox = hitbox.clone();
         window.on_mouse_event(move |event: &MouseDownEvent, phase, window, cx| {
-            if phase == DispatchPhase::Bubble && event.button == MouseButton::Left && down_hitbox.is_hovered(window) {
+            if phase == DispatchPhase::Bubble
+                && event.button == MouseButton::Left
+                && down_hitbox.is_hovered(window)
+            {
                 held.set(true);
                 window.capture_pointer(down_hitbox.id);
                 change(value_at(event.position.x, left, width), window, cx);
@@ -474,7 +554,10 @@ impl Element for Slider {
         });
         let (held, change) = (self.held.clone(), self.on_change.clone());
         window.on_mouse_event(move |event: &MouseMoveEvent, phase, window, cx| {
-            if phase == DispatchPhase::Bubble && held.get() && event.pressed_button == Some(MouseButton::Left) {
+            if phase == DispatchPhase::Bubble
+                && held.get()
+                && event.pressed_button == Some(MouseButton::Left)
+            {
                 change(value_at(event.position.x, left, width), window, cx);
             }
         });
@@ -484,19 +567,24 @@ impl Element for Slider {
                 window.release_pointer();
             }
         });
-        let (held, change, touch_hitbox) = (self.held.clone(), self.on_change.clone(), hitbox.clone());
+        let (held, change, touch_hitbox) =
+            (self.held.clone(), self.on_change.clone(), hitbox.clone());
         window.on_mouse_event(move |event: &TouchDragEvent, phase, window, cx| {
             if phase != DispatchPhase::Bubble {
                 return;
             }
             match event.phase {
-                TouchPhase::Started if touch_hitbox.is_hovered(window) && !window.default_prevented() => {
+                TouchPhase::Started
+                    if touch_hitbox.is_hovered(window) && !window.default_prevented() =>
+                {
                     // A finger on the groove slides it rather than scrolling the list.
                     window.prevent_default();
                     held.set(true);
                     change(value_at(event.position.x, left, width), window, cx);
                 }
-                TouchPhase::Moved if held.get() => change(value_at(event.position.x, left, width), window, cx),
+                TouchPhase::Moved if held.get() => {
+                    change(value_at(event.position.x, left, width), window, cx);
+                }
                 TouchPhase::Ended | TouchPhase::Cancelled if held.replace(false) => {
                     change(value_at(event.position.x, left, width), window, cx);
                 }
@@ -515,10 +603,25 @@ mod tests {
     #[test]
     fn a_tap_sets_the_value_under_the_knobs_middle() {
         // A 436px groove at 100: the knob's middle runs from 118 to 518.
-        assert!((value_at(px(118.), px(100.), px(436.)) - 0.0).abs() < 1e-6, "left end");
-        assert!((value_at(px(318.), px(100.), px(436.)) - 0.5).abs() < 1e-6, "middle");
-        assert!((value_at(px(518.), px(100.), px(436.)) - 1.0).abs() < 1e-6, "right end");
-        assert!((value_at(px(0.), px(100.), px(436.))).abs() < 1e-6, "clamped low");
-        assert!((value_at(px(900.), px(100.), px(436.)) - 1.0).abs() < 1e-6, "clamped high");
+        assert!(
+            (value_at(px(118.), px(100.), px(436.)) - 0.0).abs() < 1e-6,
+            "left end"
+        );
+        assert!(
+            (value_at(px(318.), px(100.), px(436.)) - 0.5).abs() < 1e-6,
+            "middle"
+        );
+        assert!(
+            (value_at(px(518.), px(100.), px(436.)) - 1.0).abs() < 1e-6,
+            "right end"
+        );
+        assert!(
+            (value_at(px(0.), px(100.), px(436.))).abs() < 1e-6,
+            "clamped low"
+        );
+        assert!(
+            (value_at(px(900.), px(100.), px(436.)) - 1.0).abs() < 1e-6,
+            "clamped high"
+        );
     }
 }

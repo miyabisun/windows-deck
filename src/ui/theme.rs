@@ -94,6 +94,7 @@ impl Theme {
     }
 
     /// The same theme without colour, under the resting cover.
+    #[must_use]
     pub fn grayscale(self) -> Self {
         let g = |c: Hsla| c.grayscale();
         Self {

@@ -3,13 +3,16 @@
 use std::{cell::Cell, rc::Rc};
 
 use gpui::{
-    App, FontWeight, IntoElement, ObjectFit, ParentElement, Pixels, Render, Role, SharedString,
-    Styled, Window, div, img, prelude::*, px,
+    FontWeight, IntoElement, ObjectFit, ParentElement, Pixels, Render, Role, SharedString, Styled,
+    Window, div, img, prelude::*, px,
 };
 
 use super::{
     icons::{glyph, spinner},
-    theme::{FS_LABEL, FS_SM, FS_STATE, RADIUS_MD, RADIUS_SM, SP_1, SP_2, SP_3, SP_4, SP_5, TILE_HEIGHT, Theme},
+    theme::{
+        FS_LABEL, FS_SM, FS_STATE, RADIUS_MD, RADIUS_SM, SP_1, SP_2, SP_3, SP_4, SP_5, TILE_HEIGHT,
+        Theme,
+    },
     widgets::{OnLong, is_menu_key, long_press},
 };
 use crate::model::display::{Glyph, Shown};
@@ -25,7 +28,7 @@ pub enum Face {
     /// A game: its picture across the top, and a note under its name.
     Game {
         cover: Option<SharedString>,
-        /// Shown whole (DLsite's art, program icons) rather than filling the tile.
+        /// Shown whole (`DLsite`'s art, program icons) rather than filling the tile.
         whole: bool,
         note: Option<String>,
     },
@@ -58,6 +61,7 @@ impl Render for DragPreview {
     }
 }
 
+#[allow(clippy::struct_excessive_bools)] // What the tile shows, each on its own.
 pub struct Tile {
     pub key: SharedString,
     pub label: SharedString,
@@ -67,7 +71,7 @@ pub struct Tile {
     pub disabled: bool,
     /// Under a cover (resting, or a dialog): looks as usual but takes no input.
     pub inert: bool,
-    pub on_press: Rc<dyn Fn(&mut Window, &mut App)>,
+    pub on_press: super::widgets::Act,
     pub on_long: Option<OnLong>,
     pub drag: Option<DraggedGame>,
     /// Pictures without colour, under the resting cover.
@@ -77,6 +81,7 @@ pub struct Tile {
 }
 
 impl Tile {
+    #[allow(clippy::too_many_lines)] // One tile, top to bottom.
     pub fn render(self, theme: &Theme) -> impl IntoElement + use<> {
         let game = matches!(self.face, Face::Game { .. });
         let (failed, note) = match &self.face {
@@ -109,67 +114,79 @@ impl Tile {
             .bg(theme.surface_raised)
             .text_color(theme.on_surface)
             .overflow_hidden();
-        tile = match self.face {
-            Face::Button {
-                shown,
-                picture,
-                glyph: state_glyph,
-            } => tile
-                .gap(SP_2)
-                .p(SP_4)
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(SP_3)
-                        .min_w_0()
-                        .when_some(picture, |head, picture| {
-                            head.child(
-                                img(picture)
-                                    .size(px(56.))
-                                    .flex_none()
-                                    .rounded(RADIUS_SM)
-                                    .object_fit(ObjectFit::Contain)
-                                    .grayscale(self.gray),
-                            )
-                        })
-                        .when_some(state_glyph, |head, g| {
-                            let color = if g == Glyph::Muted { theme.danger } else { theme.on_surface };
-                            head.child(
-                                div()
-                                    .flex()
-                                    .flex_none()
-                                    .items_center()
-                                    .justify_center()
-                                    .size(px(56.))
-                                    .child(glyph(g, px(43.), color)),
-                            )
-                        })
-                        .child(label.pr(SP_5)),
-                )
-                .child(
-                    div()
-                        .text_size(FS_STATE)
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .line_height(gpui::relative(1.25))
-                        .line_clamp(2)
-                        .child(super::widgets::text(shown.text)),
-                ),
-            Face::Game { cover, whole, .. } => {
-                let height = self.width * (215. / 460.);
-                tile.child(div().w_full().h(height).flex_none().when_some(cover, |frame, cover| {
-                    frame.child(
-                        img(cover)
-                            .size_full()
-                            .when(whole, |img| img.p(SP_3))
-                            .object_fit(if whole { ObjectFit::Contain } else { ObjectFit::Cover })
-                            .grayscale(self.gray)
-                            .with_fallback(|| div().into_any_element()),
+        tile =
+            match self.face {
+                Face::Button {
+                    shown,
+                    picture,
+                    glyph: state_glyph,
+                } => tile
+                    .gap(SP_2)
+                    .p(SP_4)
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(SP_3)
+                            .min_w_0()
+                            .when_some(picture, |head, picture| {
+                                head.child(
+                                    img(picture)
+                                        .size(px(56.))
+                                        .flex_none()
+                                        .rounded(RADIUS_SM)
+                                        .object_fit(ObjectFit::Contain)
+                                        .grayscale(self.gray),
+                                )
+                            })
+                            .when_some(state_glyph, |head, g| {
+                                let color = if g == Glyph::Muted {
+                                    theme.danger
+                                } else {
+                                    theme.on_surface
+                                };
+                                head.child(
+                                    div()
+                                        .flex()
+                                        .flex_none()
+                                        .items_center()
+                                        .justify_center()
+                                        .size(px(56.))
+                                        .child(glyph(g, px(43.), color)),
+                                )
+                            })
+                            .child(label.pr(SP_5)),
                     )
-                }))
-                .child(label.px(SP_4).pt(SP_3).pb(SP_2))
-            }
-        };
+                    .child(
+                        div()
+                            .text_size(FS_STATE)
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .line_height(gpui::relative(1.25))
+                            .line_clamp(2)
+                            .child(super::widgets::text(shown.text)),
+                    ),
+                Face::Game { cover, whole, .. } => {
+                    let height = self.width * (215. / 460.);
+                    tile.child(div().w_full().h(height).flex_none().when_some(
+                        cover,
+                        |frame, cover| {
+                            frame.child(
+                                img(cover)
+                                    .size_full()
+                                    .when(whole, |img| img.p(SP_3))
+                                    .object_fit(if whole {
+                                        ObjectFit::Contain
+                                    } else {
+                                        ObjectFit::Cover
+                                    })
+                                    .grayscale(self.gray)
+                                    .with_fallback(|| div().into_any_element()),
+                            )
+                        },
+                    ))
+                    .child(label.px(SP_4).pt(SP_3).pb(SP_2))
+                }
+            };
         tile = tile.when_some(note, |tile, note| {
             tile.child(
                 div()
@@ -181,10 +198,18 @@ impl Tile {
             )
         });
         // What the tests read of the tile's state.
-        for (on, what) in [(self.pending, "busy"), (failed, "failed"), (self.disabled, "disabled")] {
+        for (on, what) in [
+            (self.pending, "busy"),
+            (failed, "failed"),
+            (self.disabled, "disabled"),
+        ] {
             if on {
                 let key = self.key.clone();
-                tile = tile.child(div().absolute().debug_selector(move || format!("{what}-{key}")));
+                tile = tile.child(
+                    div()
+                        .absolute()
+                        .debug_selector(move || format!("{what}-{key}")),
+                );
             }
         }
         if self.pending {
@@ -194,14 +219,18 @@ impl Tile {
                     .top(SP_4)
                     .right(SP_4)
                     .flex()
-                    .when(game, |busy| busy.p(SP_1).rounded_full().bg(theme.surface_raised))
+                    .when(game, |busy| {
+                        busy.p(SP_1).rounded_full().bg(theme.surface_raised)
+                    })
                     .child(spinner(theme.accent)),
             );
         }
         if self.disabled || self.inert {
             return long_press(
                 SharedString::from(format!("press-{}", self.key)),
-                tile.when(self.disabled, |tile| tile.opacity(0.5).aria_description("押せません")),
+                tile.when(self.disabled, |tile| {
+                    tile.opacity(0.5).aria_description("押せません")
+                }),
                 None,
                 centre,
             );
@@ -213,9 +242,18 @@ impl Tile {
             .focusable()
             .tab_stop(true)
             .cursor_pointer()
-            .hover({ let c = theme.hover_1; move |s| s.bg(c) })
-            .active({ let c = theme.hover_2; move |s| s.bg(c) })
-            .focus_visible({ let c = theme.accent; move |s| s.border_color(c) })
+            .hover({
+                let c = theme.hover_1;
+                move |s| s.bg(c)
+            })
+            .active({
+                let c = theme.hover_2;
+                move |s| s.bg(c)
+            })
+            .focus_visible({
+                let c = theme.accent;
+                move |s| s.border_color(c)
+            })
             .on_click(move |_, window, cx| press(window, cx))
             .on_key_down(move |event, window, cx| {
                 if let Some(menu) = &menu
