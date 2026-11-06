@@ -352,6 +352,7 @@ impl Deck {
                 .aria_label(desktop.name.clone())
                 .aria_selected(current)
                 .track_focus(&handle)
+                .focus_visible(move |s| s.bg(hover))
                 .flex()
                 .flex_none()
                 .items_center()
@@ -417,6 +418,10 @@ impl Deck {
                 .aria_label(label)
                 .focusable()
                 .tab_stop(!inert)
+                .focus_visible({
+                    let c = theme.hover_1;
+                    move |s| s.bg(c)
+                })
                 .flex()
                 .flex_none()
                 .items_center()
@@ -525,6 +530,10 @@ impl Deck {
                         .aria_label(name.clone())
                         .focusable()
                         .tab_stop(true)
+                        .focus_visible({
+                            let c = theme.hover_1;
+                            move |s| s.bg(c)
+                        })
                         .flex()
                         .items_center()
                         .min_h(ROW_HEIGHT)
@@ -836,6 +845,7 @@ impl Deck {
                     .role(Role::Button)
                     .aria_label("復帰")
                     .track_focus(&self.wake_focus)
+                    .focus_visible(move |s| s.border_color(hsla(0., 0., 1., 0.8)))
                     .flex()
                     .items_center()
                     .justify_center()

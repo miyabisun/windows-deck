@@ -206,6 +206,10 @@ impl Menu {
             } else {
                 row.focusable()
                     .tab_stop(true)
+                    .focus_visible({
+                        let c = theme.hover_2;
+                        move |s| s.bg(c)
+                    })
                     .cursor_pointer()
                     .hover({
                         let c = theme.hover_1;
@@ -326,6 +330,10 @@ pub fn close_button(theme: &Theme, close: Act) -> Stateful<Div> {
         .aria_label("閉じる")
         .focusable()
         .tab_stop(true)
+        .focus_visible({
+            let c = theme.hover_2;
+            move |s| s.bg(c)
+        })
         .flex()
         .flex_none()
         .items_center()
@@ -379,6 +387,10 @@ pub fn outlined_button(
         .aria_label(label.clone())
         .focusable()
         .tab_stop(true)
+        .focus_visible({
+            let c = theme.hover_2;
+            move |s| s.bg(c)
+        })
         .flex()
         .flex_none()
         .items_center()

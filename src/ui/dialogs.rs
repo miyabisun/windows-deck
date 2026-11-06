@@ -254,6 +254,10 @@ fn choice_row(
         .aria_label(label)
         .focusable()
         .tab_stop(true)
+        .focus_visible({
+            let c = theme.hover_2;
+            move |s| s.bg(c)
+        })
         .flex()
         .items_center()
         .gap(SP_3)

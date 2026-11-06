@@ -497,6 +497,10 @@ impl LibraryModal {
             .aria_toggled(on.into())
             .focusable()
             .tab_stop(true)
+            .focus_visible({
+                let c = theme.accent;
+                move |s| s.border_color(c)
+            })
             .flex()
             .items_center()
             .gap(SP_2)
@@ -719,6 +723,10 @@ impl Render for LibraryModal {
                         .aria_label(format!("並び順: {}", order.label()))
                         .focusable()
                         .tab_stop(true)
+                        .focus_visible({
+                            let c = theme.accent;
+                            move |s| s.border_color(c)
+                        })
                         .flex()
                         .flex_none()
                         .items_center()
@@ -811,6 +819,10 @@ impl Render for LibraryModal {
                     )
                     .focusable()
                     .tab_stop(locked.is_none())
+                    .focus_visible({
+                        let c = theme.accent;
+                        move |s| s.border_color(c)
+                    })
                     .flex()
                     .items_center()
                     .justify_center()

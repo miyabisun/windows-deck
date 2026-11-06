@@ -238,6 +238,11 @@ impl MixerModal {
             .aria_toggled(muted.into())
             .focusable()
             .tab_stop(true)
+            .rounded(px(8.))
+            .focus_visible({
+                let c = theme.hover_1;
+                move |s| s.bg(c)
+            })
             .flex()
             .flex_none()
             .items_center()
@@ -298,6 +303,11 @@ impl MixerModal {
                     .aria_max_numeric_value(100.)
                     .focusable()
                     .tab_stop(true)
+                    .rounded(px(8.))
+                    .focus_visible({
+                        let c = theme.hover_1;
+                        move |s| s.bg(c)
+                    })
                     .flex_1()
                     .min_w_0()
                     .on_key_down(step)
