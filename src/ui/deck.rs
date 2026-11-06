@@ -604,7 +604,6 @@ impl Deck {
         &mut self,
         theme: &Theme,
         inert: bool,
-        width: Pixels,
         window: &Window,
         cx: &mut Context<Self>,
     ) -> Vec<gpui::AnyElement> {
@@ -733,7 +732,6 @@ impl Deck {
                     on_long,
                     drag: None,
                     gray: link.resting,
-                    width,
                 }
                 .render(theme)
                 .into_any_element(),
@@ -795,7 +793,6 @@ impl Deck {
                     on_long: Some(on_long),
                     drag: None,
                     gray: link.resting,
-                    width,
                 }
                 .render(theme)
                 .into_any_element(),
@@ -905,7 +902,7 @@ impl Render for Deck {
         };
         let inert = resting || self.overlay_open();
         let viewport = window.viewport_size();
-        let (count, width) = columns(viewport.width - SP_4 * 2., TILE_WIDTH, SP_3);
+        let (count, _) = columns(viewport.width - SP_4 * 2., TILE_WIDTH, SP_3);
         let tabs = self.tabs(&theme, inert, cx);
         let link = self.link.read(cx);
         let status = link.status;
@@ -1003,7 +1000,7 @@ impl Render for Deck {
         } else if visible_count == 0 {
             page.child(quiet("このデスクトップに割り当てたボタンはありません。"))
         } else {
-            let tiles = self.grid(&theme, inert, width, window, cx);
+            let tiles = self.grid(&theme, inert, window, cx);
             page.child(
                 div()
                     .grid()

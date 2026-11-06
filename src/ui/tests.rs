@@ -6,6 +6,7 @@ mod desktops;
 mod dlsite;
 mod library;
 mod mixer;
+mod pictures;
 
 use std::{rc::Rc, sync::Arc, time::Duration};
 

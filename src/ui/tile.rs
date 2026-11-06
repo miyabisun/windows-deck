@@ -76,8 +76,6 @@ pub struct Tile {
     pub drag: Option<DraggedGame>,
     /// Pictures without colour, under the resting cover.
     pub gray: bool,
-    /// The width the tile is laid out at, for the height of a game's picture.
-    pub width: Pixels,
 }
 
 impl Tile {
@@ -114,66 +112,74 @@ impl Tile {
             .bg(theme.surface_raised)
             .text_color(theme.on_surface)
             .overflow_hidden();
-        tile =
-            match self.face {
-                Face::Button {
-                    shown,
-                    picture,
-                    glyph: state_glyph,
-                } => tile
-                    .gap(SP_2)
-                    .p(SP_4)
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap(SP_3)
-                            .min_w_0()
-                            .when_some(picture, |head, picture| {
-                                head.child(
-                                    img(picture)
-                                        .size(px(56.))
-                                        .flex_none()
-                                        .rounded(RADIUS_SM)
-                                        .object_fit(ObjectFit::Contain)
-                                        .grayscale(self.gray),
-                                )
-                            })
-                            .when_some(state_glyph, |head, g| {
-                                let color = if g == Glyph::Muted {
-                                    theme.danger
-                                } else {
-                                    theme.on_surface
-                                };
-                                head.child(
-                                    div()
-                                        .flex()
-                                        .flex_none()
-                                        .items_center()
-                                        .justify_center()
-                                        .size(px(56.))
-                                        .child(glyph(g, px(43.), color)),
-                                )
-                            })
-                            .child(label.pr(SP_5)),
-                    )
-                    .child(
-                        div()
-                            .text_size(FS_STATE)
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .line_height(gpui::relative(1.25))
-                            .line_clamp(2)
-                            .child(super::widgets::text(shown.text)),
-                    ),
-                Face::Game { cover, whole, .. } => {
-                    let height = self.width * (215. / 460.);
-                    tile.child(div().w_full().h(height).flex_none().when_some(
-                        cover,
-                        |frame, cover| {
+        tile = match self.face {
+            Face::Button {
+                shown,
+                picture,
+                glyph: state_glyph,
+            } => tile
+                .gap(SP_2)
+                .p(SP_4)
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(SP_3)
+                        .min_w_0()
+                        .when_some(picture, |head, picture| {
+                            head.child(
+                                img(picture)
+                                    .size(px(56.))
+                                    .flex_none()
+                                    .rounded(RADIUS_SM)
+                                    .object_fit(ObjectFit::Contain)
+                                    .grayscale(self.gray),
+                            )
+                        })
+                        .when_some(state_glyph, |head, g| {
+                            let color = if g == Glyph::Muted {
+                                theme.danger
+                            } else {
+                                theme.on_surface
+                            };
+                            head.child(
+                                div()
+                                    .flex()
+                                    .flex_none()
+                                    .items_center()
+                                    .justify_center()
+                                    .size(px(56.))
+                                    .child(glyph(g, px(43.), color)),
+                            )
+                        })
+                        .child(label.pr(SP_5)),
+                )
+                .child(
+                    div()
+                        .text_size(FS_STATE)
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .line_height(gpui::relative(1.25))
+                        .line_clamp(2)
+                        .child(super::widgets::text(shown.text)),
+                ),
+            Face::Game { cover, whole, .. } => {
+                let (frame_key, picture_key) = (self.key.clone(), self.key.clone());
+                // A flex frame holds the picture to its size: a picture left to itself
+                // takes the height of its own shape.
+                tile.child(
+                    div()
+                        .debug_selector(move || format!("frame-{frame_key}"))
+                        .flex()
+                        .w_full()
+                        .aspect_ratio(460. / 215.)
+                        .flex_none()
+                        .overflow_hidden()
+                        .when(whole, |frame| frame.p(SP_3))
+                        .when_some(cover, |frame, cover| {
                             frame.child(
                                 img(cover)
+                                    .debug_selector(move || format!("picture-{picture_key}"))
                                     .size_full()
-                                    .when(whole, |img| img.p(SP_3))
                                     .object_fit(if whole {
                                         ObjectFit::Contain
                                     } else {
@@ -182,11 +188,11 @@ impl Tile {
                                     .grayscale(self.gray)
                                     .with_fallback(|| div().into_any_element()),
                             )
-                        },
-                    ))
-                    .child(label.px(SP_4).pt(SP_3).pb(SP_2))
-                }
-            };
+                        }),
+                )
+                .child(label.px(SP_4).pt(SP_3).pb(SP_2))
+            }
+        };
         tile = tile.when_some(note, |tile, note| {
             tile.child(
                 div()

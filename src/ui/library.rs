@@ -663,7 +663,6 @@ impl Render for LibraryModal {
                                     name: item.name.clone().into(),
                                 }),
                                 gray: false,
-                                width,
                             }
                             .render(&theme),
                         )
