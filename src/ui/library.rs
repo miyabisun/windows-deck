@@ -636,7 +636,8 @@ impl Render for LibraryModal {
                                 },
                             ) as super::widgets::OnLong
                         };
-                        div().w(width).flex_none().child(
+                        // A flex cell stretches its tile to the row's tallest.
+                        div().w(width).flex_none().flex().child(
                             Tile {
                                 key: format!("list-{key}").into(),
                                 label: item.name.clone().into(),

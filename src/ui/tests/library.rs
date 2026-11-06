@@ -602,3 +602,49 @@ fn the_mouse_held_down_opens_the_menu_and_does_not_start(cx: &mut TestAppContext
     click(vcx, &game("646570"));
     assert_eq!(mock.state().started, ["646570"]);
 }
+
+fn read(vcx: &mut VisualTestContext, selector: &str) -> gpui::Bounds<gpui::Pixels> {
+    super::bounds(vcx, selector).unwrap_or_else(|| panic!("{selector} is not on the screen"))
+}
+
+/// Two tiles side by side: the same height from the same top, and as wide as each other's
+/// column (columns snap to whole pixels, so they may differ by a pixel).
+fn assert_level(vcx: &mut VisualTestContext, a: &str, b: &str) {
+    let (a_bounds, b_bounds) = (read(vcx, a), read(vcx, b));
+    let widths = f32::from(a_bounds.size.width - b_bounds.size.width).abs();
+    assert!(
+        a_bounds.top() == b_bounds.top() && a_bounds.bottom() == b_bounds.bottom() && widths <= 1.,
+        "{a} {a_bounds:?} and {b} {b_bounds:?} are as large as each other"
+    );
+}
+
+#[gpui::test]
+fn games_in_a_row_are_as_tall_as_the_tallest(cx: &mut TestAppContext) {
+    let mock = mock();
+    let (_deck, vcx) = open(cx, &mock);
+    click(vcx, "tile-games");
+    show_all(vcx);
+    // A name on two lines and a note beside a short name without one.
+    let long = read(vcx, "text:NEEDY GIRL OVERDOSE タイピング オブ ザ ネット");
+    let short = read(vcx, "text:Slay the Spire");
+    assert!(
+        long.size.height > short.size.height,
+        "the long name takes two lines"
+    );
+    assert!(
+        shows(vcx, "未インストール（押すとインストール）"),
+        "the note"
+    );
+    assert_level(vcx, &game("646570"), &game("2851970"));
+}
+
+#[gpui::test]
+fn a_pinned_game_is_as_tall_as_the_buttons_in_its_row(cx: &mut TestAppContext) {
+    let mock = MockLink::default();
+    mock.state().buttons.push(library_button(
+        json!([{ "id": "2851970", "name": "NEEDY GIRL OVERDOSE タイピング オブ ザ ネット" }]),
+    ));
+    let (_deck, vcx) = open(cx, &mock);
+    assert_level(vcx, "tile-output", "tile-games/2851970");
+    assert_level(vcx, "tile-games", "tile-games/2851970");
+}

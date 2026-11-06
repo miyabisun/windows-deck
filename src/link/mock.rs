@@ -111,13 +111,15 @@ pub fn initial_dlsite() -> Value {
     })
 }
 
-/// The games behind `library_button`; labels name their games by ID.
+/// The games behind `library_button`; labels name their games by ID. A long name and a note
+/// (2851970) sit in the same row as short names without one.
 pub fn initial_library() -> Value {
     let game = |id: &str, name: &str, labels: &[&str], installed: bool| json!({ "id": id, "name": name, "installed": installed, "labels": labels });
     json!({
         "items": [
             game("1364780", "Street Fighter™ 6", &["favorite"], true),
             game("646570", "Slay the Spire", &[], true),
+            game("2851970", "NEEDY GIRL OVERDOSE タイピング オブ ザ ネット", &["favorite"], false),
             game("2868840", "Slay the Spire 2", &["uc-r15"], false),
             game("1039890", "METAL SLUG", &["hidden"], true),
         ],

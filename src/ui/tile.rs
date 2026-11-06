@@ -105,6 +105,7 @@ impl Tile {
             .flex()
             .flex_col()
             .items_start()
+            .w_full()
             .min_h(TILE_HEIGHT)
             .border_1()
             .border_color(if failed { theme.danger } else { theme.border })
