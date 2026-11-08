@@ -782,7 +782,6 @@ impl Deck {
                     label: pinned.pin.name.clone().into(),
                     face: Face::Game {
                         cover: Some(picture_url(&base, &pinned.button, &pinned.pin.id).into()),
-                        whole: pinned.whole,
                         note: None,
                     },
                     pending: link.pending.contains(&key),

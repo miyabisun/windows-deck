@@ -107,19 +107,11 @@ pub struct LibraryState {
     pub pins: Vec<Pin>,
     /// The shop to sign in to before the list can be read.
     pub sign_in: Option<String>,
-    /// `whole` when the pictures are shown whole (`DLsite`'s art and program icons).
-    pub pictures: Option<String>,
     pub license_keys: bool,
     /// Whether the library runs rounds of downloads and updates to follow.
     pub rounds: bool,
     /// Whether its games may have a shop page.
     pub pages: bool,
-}
-
-impl LibraryState {
-    pub fn whole_pictures(&self) -> bool {
-        self.pictures.as_deref() == Some("whole")
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]

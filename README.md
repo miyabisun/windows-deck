@@ -97,7 +97,7 @@ installed ones and says why. Enter in the search field starts the first game fou
 
 A `dlsite.library` button opens the DLsite games in DLsiteNest's folders the same way.
 Their pictures are the works' DLsite art (or, for games windows-link has not matched to a
-work, their program icons), shown whole, and the maker shows under the title and can be
+work, their program icons), and the maker shows under the title and can be
 searched. A game with several programs asks once which one starts it
 (the choice is remembered); its menu has **起動ファイルを選ぶ** to change it. Its labels are
 kept by windows-link, so they work without Steam.

@@ -245,8 +245,6 @@ pub fn picture_url(base: &str, button: &str, item: &str) -> String {
 pub struct Pinned {
     pub button: String,
     pub pin: Pin,
-    /// Whether its picture is shown whole rather than filling the tile.
-    pub whole: bool,
 }
 
 /// The games pinned to the library buttons among `buttons`, in button order.
@@ -260,7 +258,6 @@ pub fn pins_of<'a>(buttons: impl IntoIterator<Item = &'a Button>) -> Vec<Pinned>
                 .map(|pin| Pinned {
                     button: b.id.clone(),
                     pin: pin.clone(),
-                    whole: library.whole_pictures(),
                 })
                 .collect(),
             _ => Vec::new(),
@@ -479,7 +476,7 @@ mod tests {
             id: id.into(),
             name: id.into(),
         };
-        let library = |id: &str, pins: Vec<Pin>, pictures: &str| Button {
+        let library = |id: &str, pins: Vec<Pin>| Button {
             id: id.into(),
             label: id.into(),
             desktop: None,
@@ -487,30 +484,28 @@ mod tests {
             icon: false,
             state: State::Library(LibraryState {
                 pins,
-                pictures: Some(pictures.into()),
                 ..LibraryState::default()
             }),
         };
         let output = Button {
             state: State::Unknown,
-            ..library("output", vec![], "cover")
+            ..library("output", vec![])
         };
         let buttons = [
-            library("games", vec![pin("1"), pin("2")], "cover"),
+            library("games", vec![pin("1"), pin("2")]),
             output,
-            library("more", vec![pin("3")], "whole"),
+            library("more", vec![pin("3")]),
         ];
-        let pinned = |button: &str, id: &str, whole| Pinned {
+        let pinned = |button: &str, id: &str| Pinned {
             button: button.into(),
             pin: pin(id),
-            whole,
         };
         assert_eq!(
             pins_of(&buttons),
             [
-                pinned("games", "1", false),
-                pinned("games", "2", false),
-                pinned("more", "3", true)
+                pinned("games", "1"),
+                pinned("games", "2"),
+                pinned("more", "3")
             ]
         );
     }

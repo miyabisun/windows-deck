@@ -9,10 +9,7 @@ use http_client::{AsyncBody, HttpClient, Request, Response, Url, http::HeaderVal
 use serde_json::json;
 
 use super::{bounds, click, open};
-use crate::{
-    link::mock::{MockLink, dlsite_button, library_button},
-    ui::theme::SP_3,
-};
+use crate::link::mock::{MockLink, dlsite_button, library_button};
 
 /// Pictures of the size each URL names (the first of `sizes` whose text is in the URL), drawn as
 /// SVG, which GPUI reads like any other picture.
@@ -70,37 +67,43 @@ fn near(a: Pixels, b: Pixels) -> bool {
     (f32::from(a) - f32::from(b)).abs() <= NEAR
 }
 
-/// A picture shown whole: inside its 460:215 frame, 12px in from each side, above the name.
-fn assert_whole(vcx: &mut VisualTestContext, key: &str, name: &str) {
+/// Every game's picture the same way, whatever the shop and the picture's shape: a 460:215
+/// frame against the tile's top and sides (inside its 1px border), the picture filling the
+/// frame (and drawn whole inside it), above the name.
+fn assert_framed(vcx: &mut VisualTestContext, key: &str, name: &str) {
     let (picture, frame, name_top) = placed(vcx, key, name);
+    let tile = read(vcx, &format!("tile-{key}"));
     assert!(
         near(frame.size.height, frame.size.width * (215. / 460.)),
         "{key}: the frame is 460:215, {frame:?}"
     );
-    let inside = Bounds {
-        origin: frame.origin + gpui::point(SP_3, SP_3),
-        size: frame.size - gpui::size(SP_3 * 2., SP_3 * 2.),
-    };
+    let border = px(1.);
     assert!(
-        near(picture.left(), inside.left())
-            && near(picture.top(), inside.top())
-            && near(picture.right(), inside.right())
-            && near(picture.bottom(), inside.bottom()),
-        "{key}: the picture {picture:?} is 12px inside its frame {frame:?}"
+        near(frame.left(), tile.left() + border)
+            && near(frame.top(), tile.top() + border)
+            && near(frame.right(), tile.right() - border),
+        "{key}: the frame {frame:?} meets the top and sides of its tile {tile:?}"
     );
     assert!(
-        picture.bottom() <= name_top,
+        near(picture.left(), frame.left())
+            && near(picture.top(), frame.top())
+            && near(picture.right(), frame.right())
+            && near(picture.bottom(), frame.bottom()),
+        "{key}: the picture {picture:?} fills its frame {frame:?}"
+    );
+    assert!(
+        picture.bottom() <= name_top + px(NEAR),
         "{key}: the picture ends {:?}, above the name at {name_top:?}",
         picture.bottom()
     );
 }
 
 #[gpui::test]
-fn dlsite_and_fanza_pictures_stay_inside_their_frames(cx: &mut TestAppContext) {
+fn dlsite_and_fanza_pictures_sit_as_steam_headers_do(cx: &mut TestAppContext) {
     // a1 is DLsite's 4:3 art; b2 and c3 are FANZA's tall and wide pictures.
     with_pictures(
         cx,
-        vec![("a1", 400, 300), ("b2", 411, 560), ("c3", 822, 560)],
+        vec![("a1", 560, 420), ("b2", 411, 560), ("c3", 822, 560)],
     );
     let mock = MockLink::default();
     mock.state().buttons.push(dlsite_button(json!([
@@ -108,12 +111,12 @@ fn dlsite_and_fanza_pictures_stay_inside_their_frames(cx: &mut TestAppContext) {
         { "id": "b2", "name": "催眠アプリ" }
     ])));
     let (_deck, vcx) = open(cx, &mock);
-    assert_whole(vcx, "dlsite/a1", "湿度の高い夏のマゾ");
-    assert_whole(vcx, "dlsite/b2", "催眠アプリ");
+    assert_framed(vcx, "dlsite/a1", "湿度の高い夏のマゾ");
+    assert_framed(vcx, "dlsite/b2", "催眠アプリ");
     click(vcx, "tile-dlsite");
-    assert_whole(vcx, "list-dlsite/a1", "湿度の高い夏のマゾ");
-    assert_whole(vcx, "list-dlsite/b2", "催眠アプリ");
-    assert_whole(vcx, "list-dlsite/c3", "壊れたゲーム");
+    assert_framed(vcx, "list-dlsite/a1", "湿度の高い夏のマゾ");
+    assert_framed(vcx, "list-dlsite/b2", "催眠アプリ");
+    assert_framed(vcx, "list-dlsite/c3", "壊れたゲーム");
 }
 
 #[gpui::test]
@@ -124,13 +127,7 @@ fn a_steam_header_fills_its_frame(cx: &mut TestAppContext) {
         json!([{ "id": "646570", "name": "Slay the Spire" }]),
     ));
     let (_deck, vcx) = open(cx, &mock);
-    let (picture, frame, name_top) = placed(vcx, "games/646570", "Slay the Spire");
-    assert!(
-        near(picture.left(), frame.left())
-            && near(picture.top(), frame.top())
-            && near(picture.size.width, frame.size.width)
-            && near(picture.size.height, frame.size.height),
-        "the header {picture:?} fills its frame {frame:?}"
-    );
-    assert!(picture.bottom() <= name_top + px(NEAR), "above the name");
+    assert_framed(vcx, "games/646570", "Slay the Spire");
+    click(vcx, "tile-games");
+    assert_framed(vcx, "list-games/646570", "Slay the Spire");
 }

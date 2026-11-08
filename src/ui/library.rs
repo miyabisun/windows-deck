@@ -548,7 +548,6 @@ impl Render for LibraryModal {
             .unwrap_or_default();
         let shown = self.shown(cx);
         let pinned: Vec<String> = state.pins.iter().map(|p| p.id.clone()).collect();
-        let whole = state.whole_pictures();
         let locked = self.locked();
 
         // The grid: as many columns of at least a button's width as fit.
@@ -650,7 +649,6 @@ impl Render for LibraryModal {
                                             })
                                             .into(),
                                     ),
-                                    whole,
                                     note: notes[index].clone(),
                                 },
                                 pending: pending.contains(&key),

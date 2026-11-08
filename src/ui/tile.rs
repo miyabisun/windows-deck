@@ -28,8 +28,6 @@ pub enum Face {
     /// A game: its picture across the top, and a note under its name.
     Game {
         cover: Option<SharedString>,
-        /// Shown whole (`DLsite`'s art, program icons) rather than filling the tile.
-        whole: bool,
         note: Option<String>,
     },
 }
@@ -163,8 +161,11 @@ impl Tile {
                         .line_clamp(2)
                         .child(super::widgets::text(shown.text)),
                 ),
-            Face::Game { cover, whole, .. } => {
+            Face::Game { cover, .. } => {
                 let (frame_key, picture_key) = (self.key.clone(), self.key.clone());
+                // Every shop's picture the same way: Steam's 460:215 header fills the frame,
+                // and any other shape (DLsite's 4:3 art, FANZA's boxes, program icons) is
+                // shown whole from the frame's top to its bottom, on the frame's own colour.
                 // A flex frame holds the picture to its size: a picture left to itself
                 // takes the height of its own shape.
                 tile.child(
@@ -175,17 +176,13 @@ impl Tile {
                         .aspect_ratio(460. / 215.)
                         .flex_none()
                         .overflow_hidden()
-                        .when(whole, |frame| frame.p(SP_3))
+                        .bg(theme.surface)
                         .when_some(cover, |frame, cover| {
                             frame.child(
                                 img(cover)
                                     .debug_selector(move || format!("picture-{picture_key}"))
                                     .size_full()
-                                    .object_fit(if whole {
-                                        ObjectFit::Contain
-                                    } else {
-                                        ObjectFit::Cover
-                                    })
+                                    .object_fit(ObjectFit::Contain)
                                     .grayscale(self.gray)
                                     .with_fallback(|| div().into_any_element()),
                             )
