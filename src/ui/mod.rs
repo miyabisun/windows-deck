@@ -5,6 +5,7 @@ pub mod dialogs;
 pub mod icons;
 pub mod library;
 pub mod mixer;
+pub mod recent_images;
 pub mod text_input;
 pub mod theme;
 pub mod tile;

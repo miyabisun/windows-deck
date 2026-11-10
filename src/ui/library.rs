@@ -6,13 +6,14 @@ use std::{collections::HashMap, rc::Rc};
 use gpui::{
     AnyView, App, AppContext as _, Context, DismissEvent, Entity, EventEmitter, FocusHandle,
     Focusable, FontWeight, Global, IntoElement, ListAlignment, ListState, ParentElement, Pixels,
-    Point, Render, RetainAllImageCache, Role, SharedString, Styled, Subscription, Task, Window,
-    div, list, prelude::*, px, relative,
+    Point, Render, Role, SharedString, Styled, Subscription, Task, Window, div, list, prelude::*,
+    px, relative,
 };
 
 use super::{
     dialogs::{AskDialog, Host, MenuGame, ProgramChooser, game_menu, open},
     icons::{glyph, spinner},
+    recent_images::RecentImages,
     text_input::{Changed, TextInput},
     theme::{
         CONTROL_HEIGHT, FS_LABEL, FS_SM, RADIUS_MD, RADIUS_SM, SP_2, SP_3, SP_4, SP_5, TILE_WIDTH,
@@ -39,6 +40,12 @@ struct Orders(HashMap<String, Order>);
 
 impl Global for Orders {}
 
+/// How many of a list's pictures are kept: 16 rows of 6 on the panel's 1920×1280 screen, where
+/// a frame draws 10 to 13 rows (the 4 or 5 on the screen and 600px before and after), so the
+/// rows just passed stay ready. A picture takes about 3MB of memory and 2MB of the GPU's
+/// (measured with `DLsite`'s 560×420 art), and one let go is read from its shop again.
+pub const PICTURES: usize = 96;
+
 pub struct LibraryModal {
     link: Entity<Link>,
     button: String,
@@ -54,7 +61,7 @@ pub struct LibraryModal {
     list: ListState,
     /// The games shown and the columns, as the list was last laid out.
     laid_out: (Vec<String>, usize),
-    images: Entity<RetainAllImageCache>,
+    images: Entity<RecentImages>,
     focus: FocusHandle,
     _search: Subscription,
     _link: Subscription,
@@ -128,7 +135,7 @@ impl LibraryModal {
             dialog: None,
             list: ListState::new(0, ListAlignment::Top, px(600.)),
             laid_out: (Vec::new(), 0),
-            images: RetainAllImageCache::new(cx),
+            images: RecentImages::new(PICTURES, cx),
             focus: cx.focus_handle(),
             _search: search_changed,
             _link: observed,
@@ -136,6 +143,12 @@ impl LibraryModal {
         };
         modal.load(cx);
         modal
+    }
+
+    /// How many pictures the list holds.
+    #[cfg(test)]
+    pub fn pictures_kept(&self, cx: &App) -> usize {
+        self.images.read(cx).len()
     }
 
     pub fn search_focus(&self, cx: &App) -> FocusHandle {
@@ -530,6 +543,7 @@ impl Render for LibraryModal {
     #[allow(clippy::too_many_lines)] // One dialog, top to bottom.
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = Theme::get(cx);
+        self.images.update(cx, |images, _| images.next_frame());
         let entity = cx.entity().downgrade();
         let close: Act = {
             let entity = entity.clone();

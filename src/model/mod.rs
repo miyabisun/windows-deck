@@ -4,4 +4,5 @@ pub mod display;
 pub mod library;
 pub mod placement;
 pub mod protocol;
+pub mod recent;
 pub mod tabs;
