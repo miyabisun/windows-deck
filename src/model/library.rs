@@ -31,8 +31,10 @@ pub enum Order {
 impl Order {
     pub const ALL: [Self; 3] = [Self::Recent, Self::Updated, Self::Bought];
 
-    pub fn label(self) -> &'static str {
+    /// Its name in a library of games, or in one whose works open on the `web`.
+    pub fn label(self, web: bool) -> &'static str {
         match self {
+            Self::Recent if web => "最近開いた順",
             Self::Recent => "最近遊んだ順",
             Self::Updated => "更新日の新しい順",
             Self::Bought => "購入日の新しい順",

@@ -7,6 +7,7 @@ mod dlsite;
 mod library;
 mod mixer;
 mod pictures;
+mod web;
 
 use std::{rc::Rc, sync::Arc, time::Duration};
 

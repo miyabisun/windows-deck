@@ -102,6 +102,7 @@ pub struct OutputOption {
 /// A library button's state (`steam.library`, `dlsite.library`, `fanza.library`).
 #[derive(Debug, Clone, PartialEq, Default, Deserialize)]
 #[serde(default)]
+#[allow(clippy::struct_excessive_bools)] // What the library can do, as windows-link says each.
 pub struct LibraryState {
     /// The games pinned to the tab, in the order they were pinned.
     pub pins: Vec<Pin>,
@@ -112,6 +113,9 @@ pub struct LibraryState {
     pub rounds: bool,
     /// Whether its games may have a shop page.
     pub pages: bool,
+    /// Whether its items open on the web, with nothing on this PC (`DLsite`'s works that are
+    /// not games). windows-link before 0.1.57 does not say, and has no such library.
+    pub web: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -417,5 +421,23 @@ mod tests {
         );
         assert_eq!(Event::parse(r#"{"type":"weather"}"#), None);
         assert_eq!(Event::parse("not json"), None);
+    }
+
+    #[test]
+    fn a_library_says_whether_its_items_open_on_the_web() {
+        let library = |state: &str| {
+            let text =
+                format!(r#"{{"type":"button","button":{{"id":"l","label":"L","state":{state}}}}}"#);
+            match Event::parse(&text) {
+                Some(Event::Button(Button {
+                    state: State::Library(library),
+                    ..
+                })) => library,
+                other => panic!("not a library: {other:?}"),
+            }
+        };
+        assert!(library(r#"{"kind":"library","pins":[],"web":true}"#).web);
+        // windows-link before 0.1.57 does not say: its libraries hold games on this PC.
+        assert!(!library(r#"{"kind":"library","pins":[]}"#).web);
     }
 }

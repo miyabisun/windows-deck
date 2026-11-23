@@ -111,6 +111,32 @@ pub fn initial_dlsite() -> Value {
     })
 }
 
+/// A `dlsite.library` button whose works open on the web (windows-link's `works: r18`). It
+/// answers under `dlsite_button`'s ID; give the stand-in `web_works` for its list.
+pub fn web_button(pins: Value) -> Value {
+    json!({ "id": "dlsite", "type": "dlsite.library", "label": "DLsite R18", "desktop": null, "except": [], "icon": false,
+        "state": { "kind": "library", "pins": pins, "license_keys": false, "rounds": true, "pages": true, "web": true } })
+}
+
+/// The works behind `web_button`: "RJ1" plays in the browser, "RJ2" does not. `ASMR` is a
+/// label of the user's own.
+pub fn web_works() -> Value {
+    let work = |id: &str, name: &str, detail: &str, status: Value, bought: Value| {
+        json!({ "id": id, "name": name, "detail": detail, "choosable": false, "image": null,
+            "installed": true, "labels": [], "status": status, "updated": 1_792_076_400,
+            "bought": bought, "page": dlsite_page(id) })
+    };
+    json!({
+        "items": [
+            work("RJ1", "耳かきの音", "Voice Circle", Value::Null, json!(1_767_290_645)),
+            work("RJ2", "動く絵", "Movie Circle", json!("ブラウザ再生に非対応"), Value::Null),
+        ],
+        "labels": [ { "id": "favorite", "name": "お気に入り", "editable": false }, { "id": "hidden", "name": "非表示", "editable": false },
+            { "id": "asmr", "name": "ASMR", "editable": true } ],
+        "hide": ["hidden"], "partial": null, "labels_locked": null,
+    })
+}
+
 /// The games behind `library_button`; labels name their games by ID. A long name and a note
 /// (2851970) sit in the same row as short names without one.
 pub fn initial_library() -> Value {

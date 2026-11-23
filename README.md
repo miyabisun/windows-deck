@@ -110,6 +110,13 @@ starts with that date, and the order stays for that library until the panel rest
 game's menu (on its tile in the list or on TOP) has **販売ページを開く**, which opens its DLsite
 page in the default browser.
 
+A `dlsite.library` button that windows-link sets up for the DLsite works that are not games
+(voice, video, CG, manga; one button for the all-ages works, one for the R18 ones) opens the
+same dialog. None of these works is on this PC: tapping one opens it in the default
+browser (DLsite Play), the dialog says it opened, and its menu has no **ローカルファイル閲覧**.
+A work DLsite Play cannot play says so under its title. The list's own order is the works
+opened last.
+
 A `fanza.library` button opens the FANZA games bought the same way. While windows-link has no
 FANZA sign-in, the button says **ログインが必要です** and the list offers **ログイン**: it opens a
 login window of the panel's own on the primary monitor (shown on every virtual desktop),
@@ -138,7 +145,8 @@ why.
   (included in Windows 11)
 - windows-link 0.1.3 or later running on the same PC (it allows this panel's window to
   read its API); the Steam library needs 0.1.6 or later, the DLsite library 0.1.9 or later (0.1.10 for its art,
-  0.1.41 for its orders by date, its shop pages and **更新の状況**)
+  0.1.41 for its orders by date, its shop pages and **更新の状況**, 0.1.57 for its works that are
+  not games)
 - To build: Rust 1.96 (selected by `rust-toolchain.toml`) with the MSVC toolchain
 
 ## Install

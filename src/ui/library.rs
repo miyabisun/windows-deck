@@ -191,6 +191,11 @@ impl LibraryModal {
             })
     }
 
+    /// Whether the library's items open on the web, with nothing on this PC.
+    fn web(&self, cx: &App) -> bool {
+        self.state(cx).is_some_and(|state| state.web)
+    }
+
     fn order(&self, cx: &App) -> Order {
         let chosen = cx
             .try_global::<Orders>()
@@ -241,16 +246,22 @@ impl LibraryModal {
             .show(text, cx, |this: &mut Self| &mut this.notice);
     }
 
-    /// Start a game; the list stays open where it was, to pick the next one or its label.
+    /// Start a game (or open a work on the web); the list stays open where it was, to pick the
+    /// next one or its label.
     fn start(&mut self, item: &Item, window: &mut Window, cx: &mut Context<Self>) {
         let (id, name) = (item.id.clone(), item.name.clone());
+        let done = if self.web(cx) {
+            "開きました"
+        } else {
+            "起動しました"
+        };
         let started = self
             .link
             .update(cx, |l, cx| l.start_item(&self.button, &id, cx));
         cx.spawn_in(window, async move |this, cx| {
             let result = started.await;
             let _ = this.update_in(cx, |this, window, cx| match result {
-                Started::Started => this.tell_text(format!("「{name}」を起動しました"), cx),
+                Started::Started => this.tell_text(format!("「{name}」を{done}"), cx),
                 Started::Choose => this.choose_program(id, name, window, cx),
                 Started::Failed => {}
             });
@@ -387,6 +398,11 @@ impl LibraryModal {
         cx: &mut Context<Self>,
     ) {
         let fixed = !label.editable || self.locked().is_some();
+        let kept = if self.web(cx) {
+            "ラベルだけを消します。作品はライブラリに残ります。"
+        } else {
+            "ラベルだけを消します。ゲームはライブラリに残ります。"
+        };
         let this = cx.entity().downgrade();
         let rename = {
             let (this, label) = (this.clone(), label.clone());
@@ -428,7 +444,7 @@ impl LibraryModal {
                     let ask = cx.new(|cx| {
                         AskDialog::new(
                             format!("「{}」を削除しますか？", label.name),
-                            Some("ラベルだけを消します。ゲームはライブラリに残ります。"),
+                            Some(kept),
                             None,
                             "削除する",
                             true,
@@ -454,6 +470,7 @@ impl LibraryModal {
 
     fn order_menu(&mut self, at: Point<Pixels>, window: &mut Window, cx: &mut Context<Self>) {
         let current = self.order(cx);
+        let web = self.web(cx);
         let offered = self
             .library
             .as_ref()
@@ -463,7 +480,7 @@ impl LibraryModal {
             .into_iter()
             .map(|order| {
                 let this = cx.entity().downgrade();
-                MenuItem::new(order.label(), move |_, cx| {
+                MenuItem::new(order.label(web), move |_, cx| {
                     let _ = this.update(cx, |this, cx| {
                         cx.default_global::<Orders>()
                             .0
@@ -552,6 +569,7 @@ impl Render for LibraryModal {
             })
         };
         let state = self.state(cx).unwrap_or_default();
+        let web = state.web;
         let link = self.link.read(cx);
         let disabled = !link.connected();
         let order = self.order(cx);
@@ -732,7 +750,7 @@ impl Render for LibraryModal {
                         .id("order")
                         .debug_selector(|| "order".into())
                         .role(Role::Button)
-                        .aria_label(format!("並び順: {}", order.label()))
+                        .aria_label(format!("並び順: {}", order.label(web)))
                         .focusable()
                         .tab_stop(true)
                         .focus_visible({
@@ -751,7 +769,7 @@ impl Render for LibraryModal {
                         .text_size(FS_LABEL)
                         .cursor_pointer()
                         .hover(move |s| s.bg(hover))
-                        .child(order.label())
+                        .child(order.label(web))
                         .on_click(cx.listener(|this, event: &gpui::ClickEvent, window, cx| {
                             let at = match event {
                                 gpui::ClickEvent::Mouse(click) => click.up.position,
@@ -876,8 +894,14 @@ impl Render for LibraryModal {
                 .text_color(theme.danger)
                 .text_size(FS_SM)
                 .child(super::widgets::text(format!(
-                    "{} にログインしていません。ログインすると、買ったゲームの一覧とダウンロードが始まります（ログイン画面はメインモニターに開きます）。",
-                    shop_name(&shop)
+                    "{} にログインしていません。ログインすると、{}（ログイン画面はメインモニターに開きます）。",
+                    shop_name(&shop),
+                    // Works that open on the web are listed and not downloaded.
+                    if web {
+                        "買った作品の一覧が出ます"
+                    } else {
+                        "買ったゲームの一覧とダウンロードが始まります"
+                    }
                 )).flex_1())
                 .child({
                     let busy = self.signing_in || disabled;

@@ -317,14 +317,20 @@ pub struct RoundSummary {
     pub failure: Option<String>,
 }
 
-pub fn round_summary<Tz: TimeZone>(round: &Round, zone: &Tz) -> RoundSummary
+/// `web`: the library's works open on the web, so its round only reads the purchases.
+pub fn round_summary<Tz: TimeZone>(round: &Round, web: bool, zone: &Tz) -> RoundSummary
 where
     Tz::Offset: std::fmt::Display,
 {
     let failure = if let Some(purchases) = &round.purchases {
         Some(format!(
-            "購入一覧を読めませんでした（{}）。新しいゲームと更新は探せていません",
-            purchases_reason(purchases)
+            "購入一覧を読めませんでした（{}）。{}",
+            purchases_reason(purchases),
+            if web {
+                "一覧は前に読めたときのままです"
+            } else {
+                "新しいゲームと更新は探せていません"
+            }
         ))
     } else {
         round.folder.as_ref().map(|folder| {
@@ -362,7 +368,11 @@ where
     } else if failure.is_some() {
         None
     } else {
-        Some("新しいゲームも更新もありませんでした".into())
+        Some(if web {
+            "購入一覧を読み直しました".into()
+        } else {
+            "新しいゲームも更新もありませんでした".into()
+        })
     };
     let ended = ended.format("%m/%d %H:%M");
     RoundSummary {
@@ -976,7 +986,7 @@ mod tests {
             ..Round::default()
         };
         assert_eq!(
-            round_summary(&reading, &tokyo()),
+            round_summary(&reading, false, &tokyo()),
             RoundSummary {
                 busy: true,
                 text: "購入一覧を読んでいます".into(),
@@ -994,7 +1004,7 @@ mod tests {
             ..Round::default()
         };
         assert_eq!(
-            round_summary(&downloads, &tokyo()),
+            round_summary(&downloads, false, &tokyo()),
             RoundSummary {
                 busy: true,
                 text: "ダウンロードと更新: 3 件のうち 1 件が完了".into(),
@@ -1011,7 +1021,7 @@ mod tests {
             ..fields
         };
         assert_eq!(
-            round_summary(&Round::default(), &tokyo()),
+            round_summary(&Round::default(), false, &tokyo()),
             RoundSummary {
                 busy: false,
                 text: "windows-link の起動から、まだ一度も更新していません".into(),
@@ -1019,7 +1029,7 @@ mod tests {
             }
         );
         assert_eq!(
-            round_summary(&ended(Round::default()), &tokyo()),
+            round_summary(&ended(Round::default()), false, &tokyo()),
             RoundSummary {
                 busy: false,
                 text: "10/28 01:35 に終わりました。新しいゲームも更新もありませんでした".into(),
@@ -1034,7 +1044,7 @@ mod tests {
             ..Round::default()
         });
         assert_eq!(
-            round_summary(&some, &tokyo()).text,
+            round_summary(&some, false, &tokyo()).text,
             "10/28 01:35 に終わりました。完了 1 件・失敗 1 件"
         );
         let blocked = ended(Round {
@@ -1042,7 +1052,7 @@ mod tests {
             ..Round::default()
         });
         assert_eq!(
-            round_summary(&blocked, &tokyo()).failure.as_deref(),
+            round_summary(&blocked, false, &tokyo()).failure.as_deref(),
             Some(
                 "購入一覧を読めませんでした（DLsite のログイン画面が HTTP 403 を返しました）。新しいゲームと更新は探せていません"
             )
@@ -1053,6 +1063,7 @@ mod tests {
                     purchases: Some(purchases.into()),
                     ..Round::default()
                 },
+                false,
                 &Utc,
             )
             .failure
@@ -1078,8 +1089,19 @@ mod tests {
             ),
             ..Round::default()
         });
+        // A library of works on the web downloads nothing: its round only reads the list.
         assert_eq!(
-            round_summary(&unreadable, &tokyo()),
+            round_summary(&ended(Round::default()), true, &tokyo()).text,
+            "10/28 01:35 に終わりました。購入一覧を読み直しました"
+        );
+        assert_eq!(
+            round_summary(&blocked, true, &tokyo()).failure.as_deref(),
+            Some(
+                "購入一覧を読めませんでした（DLsite のログイン画面が HTTP 403 を返しました）。一覧は前に読めたときのままです"
+            )
+        );
+        assert_eq!(
+            round_summary(&unreadable, false, &tokyo()),
             RoundSummary {
                 busy: false,
                 text: "10/28 01:35 に終わりました".into(),

@@ -102,6 +102,8 @@ pub fn game_menu<H: Host>(
             _ => None,
         });
     let keys = library.as_ref().is_some_and(|l| l.license_keys);
+    // A work that opens on the web has no folder on this PC.
+    let folder = !library.as_ref().is_some_and(|l| l.web);
     let page = game
         .page
         .unwrap_or_else(|| library.as_ref().is_some_and(|l| l.pages));
@@ -136,7 +138,7 @@ pub fn game_menu<H: Host>(
             },
         ));
     }
-    {
+    if folder {
         let (link, button, id) = (link.clone(), button.to_owned(), game.id.clone());
         items.push(
             MenuItem::new("ローカルファイル閲覧", move |_, cx| {
@@ -1045,11 +1047,16 @@ impl Render for RoundDialog {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = Theme::get(cx);
         let close = closer(cx);
+        let link = self.link.read(cx);
+        // A library of works on the web downloads nothing, and its round says so.
+        let web = link.buttons.iter().any(|b| {
+            b.id == self.button
+                && matches!(&b.state, crate::model::protocol::State::Library(l) if l.web)
+        });
         let summary = self
             .round
             .as_ref()
-            .map(|round| round_summary(round, &chrono::Local));
-        let link = self.link.read(cx);
+            .map(|round| round_summary(round, web, &chrono::Local));
         let pending = link.pending.contains(&self.button);
         let button_failure = link.failures.get(&self.button).cloned();
         let busy = summary.as_ref().is_some_and(|s| s.busy) || pending || !link.connected();
