@@ -74,7 +74,7 @@ fn before_signing_in_the_list_says_the_works_will_show(cx: &mut TestAppContext) 
     assert!(
         shows(
             vcx,
-            "DLsite にログインしていません。ログインすると、買った作品の一覧が出ます（ログイン画面はメインモニターに開きます）。"
+            "DLsite にログインしていません。ログインすると、買った作品の一覧が出て、動画のダウンロードが始まります（ログイン画面はメインモニターに開きます）。"
         ),
         "nothing is downloaded"
     );

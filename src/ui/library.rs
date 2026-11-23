@@ -896,9 +896,9 @@ impl Render for LibraryModal {
                 .child(super::widgets::text(format!(
                     "{} にログインしていません。ログインすると、{}（ログイン画面はメインモニターに開きます）。",
                     shop_name(&shop),
-                    // Works that open on the web are listed and not downloaded.
+                    // Of the works that are not games, only the videos are downloaded.
                     if web {
-                        "買った作品の一覧が出ます"
+                        "買った作品の一覧が出て、動画のダウンロードが始まります"
                     } else {
                         "買ったゲームの一覧とダウンロードが始まります"
                     }

@@ -317,11 +317,14 @@ pub struct RoundSummary {
     pub failure: Option<String>,
 }
 
-/// `web`: the library's works open on the web, so its round only reads the purchases.
+/// `web`: the library holds `DLsite`'s works that are not games; its round downloads their
+/// videos only.
 pub fn round_summary<Tz: TimeZone>(round: &Round, web: bool, zone: &Tz) -> RoundSummary
 where
     Tz::Offset: std::fmt::Display,
 {
+    // What the round downloads.
+    let what = if web { "動画" } else { "ゲーム" };
     let failure = if let Some(purchases) = &round.purchases {
         Some(format!(
             "購入一覧を読めませんでした（{}）。{}",
@@ -334,7 +337,7 @@ where
         ))
     } else {
         round.folder.as_ref().map(|folder| {
-            format!("ゲームのフォルダを読めないため、ダウンロードしませんでした（{folder}）")
+            format!("{what}のフォルダを読めないため、ダウンロードしませんでした（{folder}）")
         })
     };
     let jobs = &round.jobs;
@@ -368,11 +371,7 @@ where
     } else if failure.is_some() {
         None
     } else {
-        Some(if web {
-            "購入一覧を読み直しました".into()
-        } else {
-            "新しいゲームも更新もありませんでした".into()
-        })
+        Some(format!("新しい{what}も更新もありませんでした"))
     };
     let ended = ended.format("%m/%d %H:%M");
     RoundSummary {
@@ -1089,10 +1088,18 @@ mod tests {
             ),
             ..Round::default()
         });
-        // A library of works on the web downloads nothing: its round only reads the list.
+        // A library of works downloads its videos only: it speaks of them, not of games.
         assert_eq!(
             round_summary(&ended(Round::default()), true, &tokyo()).text,
-            "10/28 01:35 に終わりました。購入一覧を読み直しました"
+            "10/28 01:35 に終わりました。新しい動画も更新もありませんでした"
+        );
+        assert_eq!(
+            round_summary(&unreadable, true, &tokyo())
+                .failure
+                .as_deref(),
+            Some(
+                r"動画のフォルダを読めないため、ダウンロードしませんでした（D:\DLsiteNest\Game\maker: 存在しないデバイスを指定しました。 (os error 433)）"
+            )
         );
         assert_eq!(
             round_summary(&blocked, true, &tokyo()).failure.as_deref(),

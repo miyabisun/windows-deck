@@ -112,10 +112,11 @@ page in the default browser.
 
 A `dlsite.library` button that windows-link sets up for the DLsite works that are not games
 (voice, video, CG, manga; one button for the all-ages works, one for the R18 ones) opens the
-same dialog. None of these works is on this PC: tapping one opens it in the default
-browser (DLsite Play), the dialog says it opened, and its menu has no **ローカルファイル閲覧**.
-A work DLsite Play cannot play says so under its title. The list's own order is the works
-opened last.
+same dialog. Tapping a work opens it in the default browser (DLsite Play); a video is
+downloaded by windows-link instead (needs windows-link 0.1.58 or later), and tapping it
+opens its folder in Explorer. A video not here yet says how its download goes under its
+title, as a game does. The dialog says the work opened, its menu has no
+**ローカルファイル閲覧**, and the list's own order is the works opened last.
 
 A `fanza.library` button opens the FANZA games bought the same way. While windows-link has no
 FANZA sign-in, the button says **ログインが必要です** and the list offers **ログイン**: it opens a
